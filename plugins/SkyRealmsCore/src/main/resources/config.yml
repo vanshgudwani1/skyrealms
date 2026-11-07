@@ -1,0 +1,14 @@
+# ========================================================
+# SkyRealms Core Configuration
+# ========================================================
+
+# Enable detailed debug logging across modules
+debug: false
+
+# Thread pool configuration for async event dispatch
+threading:
+  event-bus-workers: 4
+
+# Module manager settings
+modules:
+  auto-enable-on-boot: true

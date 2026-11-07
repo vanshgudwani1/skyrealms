@@ -1,0 +1,133 @@
+package com.skyrealms.core;
+
+import com.skyrealms.core.command.SkyRealmsCommand;
+import com.skyrealms.core.module.CoreModule;
+import com.skyrealms.platform.api.event.EventBus;
+import com.skyrealms.platform.api.module.ModuleLifecycleManager;
+import com.skyrealms.platform.api.module.ModuleRegistry;
+import com.skyrealms.platform.api.service.ServiceRegistry;
+import com.skyrealms.platform.common.event.DefaultEventBus;
+import com.skyrealms.platform.common.module.DefaultModuleLifecycleManager;
+import com.skyrealms.platform.common.module.DefaultModuleRegistry;
+import com.skyrealms.platform.common.module.DependencyResolver;
+import com.skyrealms.platform.common.module.DirectedGraphDependencyResolver;
+import com.skyrealms.platform.common.service.ConcurrentServiceRegistry;
+import org.bukkit.command.PluginCommand;
+import org.bukkit.plugin.ServicePriority;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.slf4j.Logger;
+
+import java.io.File;
+
+/**
+ * Root Paper plugin for SkyRealms.
+ */
+public final class SkyRealmsCorePlugin extends JavaPlugin {
+
+    private ConcurrentServiceRegistry serviceRegistry;
+    private DefaultEventBus eventBus;
+    private DefaultModuleRegistry moduleRegistry;
+    private DirectedGraphDependencyResolver dependencyResolver;
+    private DefaultModuleLifecycleManager lifecycleManager;
+
+    @Override
+    public void onLoad() {
+        saveDefaultConfig();
+
+        Logger slf4jLogger = getSLF4JLogger();
+        slf4jLogger.info("Bootstrapping SkyRealms Core runtime...");
+
+        this.serviceRegistry = new ConcurrentServiceRegistry();
+        this.eventBus = new DefaultEventBus();
+        this.moduleRegistry = new DefaultModuleRegistry();
+        this.dependencyResolver = new DirectedGraphDependencyResolver();
+
+        File modulesDir = new File(getDataFolder(), "modules");
+        if (!modulesDir.exists()) {
+            modulesDir.mkdirs();
+        }
+
+        this.lifecycleManager = new DefaultModuleLifecycleManager(
+                moduleRegistry,
+                dependencyResolver,
+                serviceRegistry,
+                eventBus,
+                modulesDir.toPath(),
+                slf4jLogger
+        );
+
+        // Register core platform singletons in ServiceRegistry
+        serviceRegistry.register(ServiceRegistry.class, serviceRegistry);
+        serviceRegistry.register(EventBus.class, eventBus);
+        serviceRegistry.register(ModuleRegistry.class, moduleRegistry);
+        serviceRegistry.register(DependencyResolver.class, dependencyResolver);
+        serviceRegistry.register(ModuleLifecycleManager.class, lifecycleManager);
+
+        // Register in Bukkit ServicesManager for downstream Paper plugins
+        getServer().getServicesManager().register(ServiceRegistry.class, serviceRegistry, this, ServicePriority.Highest);
+        getServer().getServicesManager().register(EventBus.class, eventBus, this, ServicePriority.Highest);
+        getServer().getServicesManager().register(ModuleRegistry.class, moduleRegistry, this, ServicePriority.Highest);
+        getServer().getServicesManager().register(ModuleLifecycleManager.class, lifecycleManager, this, ServicePriority.Highest);
+
+        // Register default CoreModule
+        moduleRegistry.register(new CoreModule());
+    }
+
+    @Override
+    public void onEnable() {
+        Logger slf4jLogger = getSLF4JLogger();
+        slf4jLogger.info("Starting SkyRealms Core plugin...");
+
+        // Register commands
+        SkyRealmsCommand commandHandler = new SkyRealmsCommand(this, moduleRegistry, lifecycleManager);
+        PluginCommand command = getCommand("skyrealms");
+        if (command != null) {
+            command.setExecutor(commandHandler);
+            command.setTabCompleter(commandHandler);
+        }
+
+        // Enable all registered modules
+        if (getConfig().getBoolean("modules.auto-enable-on-boot", true)) {
+            lifecycleManager.enableAll();
+        }
+
+        slf4jLogger.info("SkyRealms Core plugin successfully started.");
+    }
+
+    @Override
+    public void onDisable() {
+        Logger slf4jLogger = getSLF4JLogger();
+        slf4jLogger.info("Stopping SkyRealms Core plugin...");
+
+        if (lifecycleManager != null) {
+            lifecycleManager.disableAll();
+        }
+
+        if (eventBus != null) {
+            eventBus.close();
+        }
+
+        if (serviceRegistry != null) {
+            serviceRegistry.clear();
+        }
+
+        getServer().getServicesManager().unregisterAll(this);
+        slf4jLogger.info("SkyRealms Core shutdown complete.");
+    }
+
+    public ServiceRegistry serviceRegistry() {
+        return serviceRegistry;
+    }
+
+    public EventBus eventBus() {
+        return eventBus;
+    }
+
+    public ModuleRegistry moduleRegistry() {
+        return moduleRegistry;
+    }
+
+    public ModuleLifecycleManager lifecycleManager() {
+        return lifecycleManager;
+    }
+}

@@ -1,0 +1,7 @@
+name: SkyRealmsCore
+version: '1.0.0'
+main: com.skyrealms.core.SkyRealmsCorePlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Foundational core engine, service locator, and module lifecycle manager for SkyRealms.
+prefix: SkyRealms
