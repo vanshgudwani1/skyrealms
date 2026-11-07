@@ -9,6 +9,8 @@ include("platform:testing")
 
 // SkyRealms Plugin Modules
 include("plugins:SkyRealmsCore")
+include("plugins:SkyRealmsDatabase")
+include("plugins:SkyRealmsPlayer")
 
 pluginManagement {
     repositories {

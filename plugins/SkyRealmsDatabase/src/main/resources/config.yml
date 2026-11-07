@@ -1,0 +1,25 @@
+# ========================================================
+# SkyRealms Database Configuration
+# ========================================================
+
+database:
+  # Mode: 'auto' (attempts PostgreSQL first; falls back to embedded H2 if PostgreSQL is unreachable)
+  # or 'postgresql' (strictly requires PostgreSQL)
+  mode: "auto"
+  host: "127.0.0.1"
+  port: 5432
+  name: "skyrealms"
+  username: "skyrealms"
+  password: "password"
+  ssl: false
+
+pool:
+  maximum-pool-size: 10
+  minimum-idle: 2
+  connection-timeout-ms: 3000
+  idle-timeout-ms: 600000
+  max-lifetime-ms: 1800000
+  leak-detection-threshold-ms: 10000
+
+migrations:
+  auto-run: true

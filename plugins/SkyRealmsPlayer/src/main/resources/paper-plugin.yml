@@ -1,0 +1,17 @@
+name: SkyRealmsPlayer
+version: '1.0.0'
+main: com.skyrealms.player.SkyRealmsPlayerPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Authoritative player profile and persistent session management for SkyRealms.
+prefix: SkyRealms-Player
+dependencies:
+  server:
+    SkyRealmsCore:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsDatabase:
+      load: BEFORE
+      required: true
+      join-classpath: true

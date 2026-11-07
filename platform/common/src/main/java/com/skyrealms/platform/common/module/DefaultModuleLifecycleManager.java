@@ -66,6 +66,10 @@ public final class DefaultModuleLifecycleManager implements ModuleLifecycleManag
         for (SkyModule module : ordered) {
             ModuleId id = module.id();
 
+            if (module.state() == ModuleState.ENABLED || enabledModules.contains(module)) {
+                continue;
+            }
+
             // Check if any required dependency failed
             boolean dependencyFailed = false;
             for (ModuleId dep : module.metadata().dependencies()) {

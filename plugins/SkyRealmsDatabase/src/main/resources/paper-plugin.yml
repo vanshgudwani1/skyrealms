@@ -1,0 +1,13 @@
+name: SkyRealmsDatabase
+version: '1.0.0'
+main: com.skyrealms.database.SkyRealmsDatabasePlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Authoritative PostgreSQL database engine and migration runner for SkyRealms.
+prefix: SkyRealms-DB
+dependencies:
+  server:
+    SkyRealmsCore:
+      load: BEFORE
+      required: true
+      join-classpath: true

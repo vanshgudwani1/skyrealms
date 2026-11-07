@@ -1,0 +1,11 @@
+# ========================================================
+# SkyRealms Player Configuration
+# ========================================================
+
+cache:
+  # Maximum duration in minutes to keep offline player profiles in memory
+  offline-cache-minutes: 10
+
+session:
+  # Minimum duration in seconds to record as an active session
+  min-session-duration-seconds: 1

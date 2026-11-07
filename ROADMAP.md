@@ -16,14 +16,17 @@
 
 ---
 
-### [ ] M1 — Core, Database and Players
-* [ ] Implement `SkyRealmsDatabase` plugin.
-* [ ] Configure HikariCP connection pool with PostgreSQL.
-* [ ] Set up Flyway migrations (`V1__initial_player_schema.sql`).
-* [ ] Implement `SkyRealmsPlayer` plugin:
+### [x] M1 — Core, Database and Players
+* [x] Implement `SkyRealmsDatabase` plugin.
+* [x] Configure HikariCP connection pool with PostgreSQL (and embedded H2 PostgreSQL-mode fallback).
+* [x] Set up Flyway migrations (`V1__create_player_tables.sql`).
+* [x] Implement `SkyRealmsPlayer` plugin:
   * Persistent player profile loading on join (`AsyncPlayerPreLoginEvent`).
   * Offline data caching and clean unload on quit.
   * Session duration and basic player settings.
+  * In-game command `/profile [player]`.
+* [x] Shadow plugin integration with SPI `mergeServiceFiles()`.
+* [x] ServerLoadEvent boot synchronization.
 
 ---
 

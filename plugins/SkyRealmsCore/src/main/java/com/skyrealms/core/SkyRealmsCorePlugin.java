@@ -13,8 +13,12 @@ import com.skyrealms.platform.common.module.DependencyResolver;
 import com.skyrealms.platform.common.module.DirectedGraphDependencyResolver;
 import com.skyrealms.platform.common.service.ConcurrentServiceRegistry;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -22,7 +26,7 @@ import java.io.File;
 /**
  * Root Paper plugin for SkyRealms.
  */
-public final class SkyRealmsCorePlugin extends JavaPlugin {
+public final class SkyRealmsCorePlugin extends JavaPlugin implements Listener {
 
     private ConcurrentServiceRegistry serviceRegistry;
     private DefaultEventBus eventBus;
@@ -78,6 +82,9 @@ public final class SkyRealmsCorePlugin extends JavaPlugin {
         Logger slf4jLogger = getSLF4JLogger();
         slf4jLogger.info("Starting SkyRealms Core plugin...");
 
+        // Register event listener for server boot completion
+        getServer().getPluginManager().registerEvents(this, this);
+
         // Register commands
         SkyRealmsCommand commandHandler = new SkyRealmsCommand(this, moduleRegistry, lifecycleManager);
         PluginCommand command = getCommand("skyrealms");
@@ -86,12 +93,15 @@ public final class SkyRealmsCorePlugin extends JavaPlugin {
             command.setTabCompleter(commandHandler);
         }
 
-        // Enable all registered modules
+        slf4jLogger.info("SkyRealms Core plugin successfully started. Awaiting complete server load to activate modules.");
+    }
+
+    @EventHandler
+    public void onServerLoad(@NotNull ServerLoadEvent event) {
         if (getConfig().getBoolean("modules.auto-enable-on-boot", true)) {
+            getSLF4JLogger().info("Server load completed ({}); activating all registered SkyRealms modules...", event.getType());
             lifecycleManager.enableAll();
         }
-
-        slf4jLogger.info("SkyRealms Core plugin successfully started.");
     }
 
     @Override
