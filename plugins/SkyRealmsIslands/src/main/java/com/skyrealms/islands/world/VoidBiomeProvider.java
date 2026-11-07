@@ -19,7 +19,7 @@ public final class VoidBiomeProvider extends BiomeProvider {
     }
 
     public VoidBiomeProvider() {
-        this(Biome.PLAINS);
+        this(Biome.CHERRY_GROVE);
     }
 
     @Override

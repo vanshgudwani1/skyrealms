@@ -5,9 +5,12 @@ import com.skyrealms.islands.model.Island;
 import com.skyrealms.islands.model.IslandMember;
 import com.skyrealms.islands.model.IslandRole;
 import com.skyrealms.islands.model.IslandSettings;
+import com.skyrealms.islands.service.IslandManager;
 import com.skyrealms.islands.service.IslandService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -48,10 +51,10 @@ public final class IslandCommand implements CommandExecutor, TabCompleter {
         switch (sub) {
             case "create" -> {
                 String name = args.length >= 2 ? String.join(" ", Arrays.copyOfRange(args, 1, args.length)) : null;
-                player.sendMessage(Component.text("Allocating void coordinates and generating your island...", NamedTextColor.GRAY));
+                player.sendMessage(Component.text("🌸 Allocating celestial coordinates and generating your Cherry Island...", TextColor.fromHexString("#FF77A8")));
                 islandService.createIsland(player.getUniqueId(), name)
                         .thenAccept(island -> {
-                            player.sendMessage(Component.text("✔ Your island has been created!", NamedTextColor.GREEN));
+                            player.sendMessage(Component.text("🌸 Welcome to your Cherry Blossom Sanctuary!", TextColor.fromHexString("#FF77A8"), TextDecoration.BOLD));
                             islandService.teleportHome(player);
                         })
                         .exceptionally(ex -> {
@@ -60,6 +63,18 @@ public final class IslandCommand implements CommandExecutor, TabCompleter {
                         });
             }
             case "home" -> islandService.teleportHome(player);
+            case "border" -> {
+                Optional<Island> opt = islandService.getIslandByPlayer(player.getUniqueId());
+                if (opt.isEmpty()) {
+                    player.sendMessage(Component.text("You do not belong to an island.", NamedTextColor.RED));
+                    return true;
+                }
+                if (islandService instanceof IslandManager im) {
+                    im.effectsService().toggleBorderVisualizer(player, opt.get());
+                }
+            }
+            case "upgrades" -> islandGui.openUpgradesMenu(player);
+            case "warps" -> islandGui.openPublicIslandsMenu(player);
             case "invite" -> {
                 if (args.length < 2) {
                     player.sendMessage(Component.text("Usage: /island invite <player>", NamedTextColor.RED));
@@ -247,7 +262,7 @@ public final class IslandCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
         if (args.length == 1) {
-            return List.of("create", "home", "invite", "accept", "kick", "leave", "visit", "settings", "info", "members", "name", "reset", "delete", "gui", "menu");
+            return List.of("create", "home", "invite", "accept", "kick", "leave", "visit", "settings", "info", "members", "name", "reset", "delete", "gui", "menu", "border", "upgrades", "warps");
         }
         if (args.length == 2) {
             String sub = args[0].toLowerCase(Locale.ROOT);

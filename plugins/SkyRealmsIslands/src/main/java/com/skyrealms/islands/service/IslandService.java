@@ -60,6 +60,9 @@ public interface IslandService {
     @NotNull
     Location getIslandSpawnLocation(@NotNull Island island);
 
+    @NotNull
+    java.util.Collection<Island> getAllActiveIslands();
+
     void teleportHome(@NotNull Player player);
 
     void visitIsland(@NotNull Player visitor, @NotNull UUID targetIslandId);

@@ -3,6 +3,7 @@ package com.skyrealms.islands.service;
 import com.skyrealms.economy.model.TransactionResult;
 import com.skyrealms.economy.service.EconomyService;
 import com.skyrealms.islands.event.*;
+import com.skyrealms.islands.fx.IslandEffectsService;
 import com.skyrealms.islands.model.*;
 import com.skyrealms.islands.repository.IslandRepository;
 import com.skyrealms.islands.world.SpatialGridAllocator;
@@ -42,6 +43,7 @@ public final class IslandManager implements IslandService, AutoCloseable {
     private final int defaultSize;
     private final int centerY;
 
+    private final IslandEffectsService effectsService;
     private final ExecutorService executor;
 
     // Cache: Spatial grid key -> Island
@@ -74,6 +76,7 @@ public final class IslandManager implements IslandService, AutoCloseable {
         this.worldName = worldName;
         this.defaultSize = defaultSize;
         this.centerY = centerY;
+        this.effectsService = new IslandEffectsService(plugin);
 
         this.executor = Executors.newFixedThreadPool(4, r -> {
             Thread t = new Thread(r, "SkyRealms-Islands-Worker");
@@ -213,7 +216,11 @@ public final class IslandManager implements IslandService, AutoCloseable {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     World world = Bukkit.getWorld(worldName);
                     if (world != null) {
-                        StarterIslandGenerator.generateStarterIsland(world, cx, centerY, cz);
+                        Location spawn = StarterIslandGenerator.generateStarterIsland(world, cx, centerY, cz);
+                        Player player = Bukkit.getPlayer(ownerId);
+                        if (player != null && player.isOnline()) {
+                            effectsService.playGenesisBurst(player, spawn);
+                        }
                     }
                     worldFuture.complete(null);
                 });
@@ -391,6 +398,13 @@ public final class IslandManager implements IslandService, AutoCloseable {
                     repository.updateIsland(island);
                 }
 
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    Player ownerPlayer = Bukkit.getPlayer(island.ownerUuid());
+                    if (ownerPlayer != null && ownerPlayer.isOnline()) {
+                        effectsService.playUpgradeCelebration(ownerPlayer);
+                    }
+                });
+
                 eventBus.publishAsync(new IslandUpgradedEvent(islandId, upgrade));
                 return true;
             } catch (SQLException e) {
@@ -420,6 +434,17 @@ public final class IslandManager implements IslandService, AutoCloseable {
 
     @Override
     @NotNull
+    public java.util.Collection<Island> getAllActiveIslands() {
+        return Collections.unmodifiableCollection(islandCache.values());
+    }
+
+    @NotNull
+    public IslandEffectsService effectsService() {
+        return effectsService;
+    }
+
+    @Override
+    @NotNull
     public Location getIslandSpawnLocation(@NotNull Island island) {
         World world = Bukkit.getWorld(island.location().worldName());
         return new Location(
@@ -442,8 +467,10 @@ public final class IslandManager implements IslandService, AutoCloseable {
 
         Location spawn = getIslandSpawnLocation(opt.get());
         Bukkit.getScheduler().runTask(plugin, () -> {
-            player.teleportAsync(spawn);
-            player.sendMessage(Component.text("Teleported to your island home.", NamedTextColor.GREEN));
+            player.teleportAsync(spawn).thenRun(() -> {
+                effectsService.playTeleportHelix(player);
+            });
+            player.sendMessage(Component.text("🌸 Welcome home to your Cherry Sanctuary.", NamedTextColor.LIGHT_PURPLE));
         });
     }
 
@@ -462,8 +489,10 @@ public final class IslandManager implements IslandService, AutoCloseable {
 
         Location spawn = getIslandSpawnLocation(target);
         Bukkit.getScheduler().runTask(plugin, () -> {
-            visitor.teleportAsync(spawn);
-            visitor.sendMessage(Component.text("Visiting " + (target.name() != null ? target.name() : "Island") + "...", NamedTextColor.GREEN));
+            visitor.teleportAsync(spawn).thenRun(() -> {
+                effectsService.playTeleportHelix(visitor);
+            });
+            visitor.sendMessage(Component.text("🌸 Visiting " + (target.name() != null ? target.name() : "Island") + "...", NamedTextColor.LIGHT_PURPLE));
 
             // Record visit asynchronously
             IslandVisit visit = new IslandVisit(UUID.randomUUID(), targetIslandId, visitor.getUniqueId(), Instant.now(), 0L);
@@ -480,6 +509,7 @@ public final class IslandManager implements IslandService, AutoCloseable {
 
     @Override
     public void close() {
+        effectsService.cleanup();
         executor.shutdown();
         try {
             if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
