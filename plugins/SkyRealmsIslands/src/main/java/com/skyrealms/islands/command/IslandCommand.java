@@ -234,7 +234,7 @@ public final class IslandCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(Component.text("✔ Setting '" + setting + "' updated to " + value + ".", NamedTextColor.GREEN));
                 });
             }
-            case "delete", "reset" -> {
+            case "delete" -> {
                 Optional<Island> opt = islandService.getIslandByPlayer(player.getUniqueId());
                 if (opt.isEmpty()) {
                     player.sendMessage(Component.text("You do not belong to an island.", NamedTextColor.RED));
@@ -245,11 +245,30 @@ public final class IslandCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(Component.text("Only the island leader can delete the island.", NamedTextColor.RED));
                     return true;
                 }
+                player.sendMessage(Component.text("🌸 Deleting island and teleporting you to spawn...", TextColor.fromHexString("#FF77A8")));
                 islandService.deleteIsland(is.id()).thenAccept(success -> {
                     if (success) {
-                        player.sendMessage(Component.text("✔ Your island has been deleted.", NamedTextColor.GREEN));
+                        player.sendMessage(Component.text("✔ Your island has been permanently deleted and cleared.", NamedTextColor.GREEN, TextDecoration.BOLD));
                     } else {
                         player.sendMessage(Component.text("✖ Could not delete island.", NamedTextColor.RED));
+                    }
+                });
+            }
+            case "reset" -> {
+                Optional<Island> opt = islandService.getIslandByPlayer(player.getUniqueId());
+                if (opt.isEmpty()) {
+                    player.sendMessage(Component.text("You do not belong to an island.", NamedTextColor.RED));
+                    return true;
+                }
+                Island is = opt.get();
+                if (is.getRole(player.getUniqueId()) != IslandRole.LEADER) {
+                    player.sendMessage(Component.text("Only the island leader can reset the island.", NamedTextColor.RED));
+                    return true;
+                }
+                player.sendMessage(Component.text("🌸 Resetting island and generating fresh Cherry Blossom platform...", TextColor.fromHexString("#FF77A8")));
+                islandService.resetIsland(is.id()).thenAccept(success -> {
+                    if (!success) {
+                        player.sendMessage(Component.text("✖ Could not reset island.", NamedTextColor.RED));
                     }
                 });
             }

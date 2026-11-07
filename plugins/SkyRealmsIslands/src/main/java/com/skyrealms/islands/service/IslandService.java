@@ -40,6 +40,12 @@ public interface IslandService {
     CompletableFuture<Boolean> deleteIsland(@NotNull UUID islandId);
 
     @NotNull
+    CompletableFuture<Boolean> resetIsland(@NotNull UUID islandId);
+
+    @NotNull
+    Location getServerSpawnLocation();
+
+    @NotNull
     CompletableFuture<Boolean> invitePlayer(@NotNull UUID islandId, @NotNull UUID actorId, @NotNull UUID targetId);
 
     @NotNull

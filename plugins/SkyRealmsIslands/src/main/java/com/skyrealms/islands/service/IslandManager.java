@@ -11,9 +11,10 @@ import com.skyrealms.islands.world.StarterIslandGenerator;
 import com.skyrealms.platform.api.event.EventBus;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.World;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
@@ -237,11 +238,69 @@ public final class IslandManager implements IslandService, AutoCloseable {
 
     @Override
     @NotNull
+    public Location getServerSpawnLocation() {
+        World overworld = Bukkit.getWorld("world");
+        if (overworld == null && !Bukkit.getWorlds().isEmpty()) {
+            overworld = Bukkit.getWorlds().get(0);
+        }
+        if (overworld != null) {
+            return overworld.getSpawnLocation().clone().add(0.5, 0.5, 0.5);
+        }
+        return new Location(Bukkit.getWorlds().get(0), 0.5, 100, 0.5);
+    }
+
+    private void clearIslandBlocks(@NotNull Island island) {
+        World world = Bukkit.getWorld(island.location().worldName());
+        if (world == null) return;
+
+        int half = island.size() / 2;
+        int minX = island.location().centerX() - half;
+        int maxX = island.location().centerX() + half;
+        int minZ = island.location().centerZ() - half;
+        int maxZ = island.location().centerZ() + half;
+
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                int highestY = world.getHighestBlockYAt(x, z, HeightMap.WORLD_SURFACE);
+                if (highestY >= world.getMinHeight()) {
+                    for (int y = world.getMinHeight(); y <= highestY; y++) {
+                        Block b = world.getBlockAt(x, y, z);
+                        if (!b.getType().isAir()) {
+                            b.setType(Material.AIR, false);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Override
+    @NotNull
     public CompletableFuture<Boolean> deleteIsland(@NotNull UUID islandId) {
         return CompletableFuture.supplyAsync(() -> {
             Island island = islandCache.get(islandId);
             if (island == null) return false;
 
+            // 1. Evacuate players on this island to server spawn and clear blocks
+            CompletableFuture<Void> evictFuture = new CompletableFuture<>();
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                Location serverSpawn = getServerSpawnLocation();
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    boolean isOnIsland = island.location().contains(p.getWorld().getName(), p.getLocation().getBlockX(), p.getLocation().getBlockZ(), island.size());
+                    if (isOnIsland || island.isMember(p.getUniqueId())) {
+                        p.teleportAsync(serverSpawn);
+                        p.sendMessage(Component.text("🌸 You were teleported to spawn because the island was deleted.", NamedTextColor.YELLOW));
+                        p.playSound(p.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
+                    }
+                }
+
+                // Clear all blocks in the void world
+                clearIslandBlocks(island);
+                evictFuture.complete(null);
+            });
+            evictFuture.join();
+
+            // 2. Persist deletion in database
             try {
                 island.setStatus(IslandStatus.DELETED);
                 repository.updateIsland(island);
@@ -253,6 +312,44 @@ public final class IslandManager implements IslandService, AutoCloseable {
                 LOGGER.error("Failed to delete island {}: {}", islandId, e.getMessage(), e);
                 return false;
             }
+        }, executor);
+    }
+
+    @Override
+    @NotNull
+    public CompletableFuture<Boolean> resetIsland(@NotNull UUID islandId) {
+        return CompletableFuture.supplyAsync(() -> {
+            Island island = islandCache.get(islandId);
+            if (island == null) return false;
+
+            CompletableFuture<Void> resetFuture = new CompletableFuture<>();
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                World world = Bukkit.getWorld(island.location().worldName());
+                if (world != null) {
+                    // 1. Clear old blocks
+                    clearIslandBlocks(island);
+
+                    // 2. Generate fresh Cherry Blossom island
+                    Location newSpawn = StarterIslandGenerator.generateStarterIsland(
+                            world,
+                            island.location().centerX(),
+                            island.location().centerY(),
+                            island.location().centerZ()
+                    );
+
+                    // 3. Teleport owner and members to the fresh spawn
+                    Player owner = Bukkit.getPlayer(island.ownerUuid());
+                    if (owner != null && owner.isOnline()) {
+                        owner.teleportAsync(newSpawn).thenRun(() -> {
+                            effectsService.playGenesisBurst(owner, newSpawn);
+                        });
+                        owner.sendMessage(Component.text("🌸 Your island has been reset to the Cherry Blossom starter platform!", TextColor.fromHexString("#FF77A8"), TextDecoration.BOLD));
+                    }
+                }
+                resetFuture.complete(null);
+            });
+            resetFuture.join();
+            return true;
         }, executor);
     }
 
