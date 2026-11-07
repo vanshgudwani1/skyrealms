@@ -8,6 +8,7 @@ import com.skyrealms.economy.repository.EconomyRepository;
 import com.skyrealms.economy.service.EconomyService;
 import com.skyrealms.economy.vault.VaultEconomyBridge;
 import com.skyrealms.platform.api.module.*;
+import com.skyrealms.platform.common.command.DynamicCommandRegistrar;
 import com.skyrealms.platform.database.DatabaseService;
 import com.skyrealms.platform.integrations.EconomyProvider;
 import net.milkbowl.vault.economy.Economy;
@@ -96,26 +97,44 @@ public final class EconomyModule implements SkyModule {
         // Register Commands
         BigDecimal minPay = BigDecimal.valueOf(plugin.getConfig().getDouble("rules.min-pay-amount", 1.00));
 
-        PluginCommand balCmd = plugin.getServer().getPluginCommand("balance");
-        if (balCmd != null) {
-            BalanceCommand handler = new BalanceCommand(economyService);
-            balCmd.setExecutor(handler);
-            balCmd.setTabCompleter(handler);
-        }
+        BalanceCommand balHandler = new BalanceCommand(economyService);
+        DynamicCommandRegistrar.register(
+                "skyrealms",
+                "balance",
+                "Check currency balance",
+                "/balance [player]",
+                java.util.List.of("bal", "money"),
+                "skyrealms.economy.balance",
+                org.bukkit.permissions.PermissionDefault.TRUE,
+                "§cYou do not have permission to use /balance.",
+                balHandler
+        );
 
-        PluginCommand payCmd = plugin.getServer().getPluginCommand("pay");
-        if (payCmd != null) {
-            PayCommand handler = new PayCommand(economyService, primaryCurrency, minPay);
-            payCmd.setExecutor(handler);
-            payCmd.setTabCompleter(handler);
-        }
+        PayCommand payHandler = new PayCommand(economyService, primaryCurrency, minPay);
+        DynamicCommandRegistrar.register(
+                "skyrealms",
+                "pay",
+                "Pay currency to another online player",
+                "/pay <player> <amount>",
+                java.util.Collections.emptyList(),
+                "skyrealms.economy.pay",
+                org.bukkit.permissions.PermissionDefault.TRUE,
+                "§cYou do not have permission to use /pay.",
+                payHandler
+        );
 
-        PluginCommand ecoCmd = plugin.getServer().getPluginCommand("eco");
-        if (ecoCmd != null) {
-            EcoCommand handler = new EcoCommand(economyService);
-            ecoCmd.setExecutor(handler);
-            ecoCmd.setTabCompleter(handler);
-        }
+        EcoCommand ecoHandler = new EcoCommand(economyService);
+        DynamicCommandRegistrar.register(
+                "skyrealms",
+                "eco",
+                "Administrative economy management",
+                "/eco <give|take|set> <player> <currency> <amount> [reason]",
+                java.util.Collections.emptyList(),
+                "skyrealms.economy.admin",
+                org.bukkit.permissions.PermissionDefault.OP,
+                "§cYou do not have permission to use /eco.",
+                ecoHandler
+        );
 
         state = ModuleState.ENABLED;
         context.logger().info("SkyRealms Economy module successfully enabled.");

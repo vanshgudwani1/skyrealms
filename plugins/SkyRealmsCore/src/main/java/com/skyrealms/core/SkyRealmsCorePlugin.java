@@ -6,6 +6,7 @@ import com.skyrealms.platform.api.event.EventBus;
 import com.skyrealms.platform.api.module.ModuleLifecycleManager;
 import com.skyrealms.platform.api.module.ModuleRegistry;
 import com.skyrealms.platform.api.service.ServiceRegistry;
+import com.skyrealms.platform.common.command.DynamicCommandRegistrar;
 import com.skyrealms.platform.common.event.DefaultEventBus;
 import com.skyrealms.platform.common.module.DefaultModuleLifecycleManager;
 import com.skyrealms.platform.common.module.DefaultModuleRegistry;
@@ -87,11 +88,17 @@ public final class SkyRealmsCorePlugin extends JavaPlugin implements Listener {
 
         // Register commands
         SkyRealmsCommand commandHandler = new SkyRealmsCommand(this, moduleRegistry, lifecycleManager);
-        PluginCommand command = getCommand("skyrealms");
-        if (command != null) {
-            command.setExecutor(commandHandler);
-            command.setTabCompleter(commandHandler);
-        }
+        DynamicCommandRegistrar.register(
+                "skyrealms",
+                "skyrealms",
+                "Main administrative command for SkyRealms",
+                "/skyrealms [help|modules|version|reload]",
+                java.util.List.of("sr"),
+                "skyrealms.admin",
+                org.bukkit.permissions.PermissionDefault.OP,
+                "§cYou do not have permission to use /skyrealms.",
+                commandHandler
+        );
 
         slf4jLogger.info("SkyRealms Core plugin successfully started. Awaiting complete server load to activate modules.");
     }

@@ -9,6 +9,7 @@ import com.skyrealms.islands.service.IslandManager;
 import com.skyrealms.islands.service.IslandService;
 import com.skyrealms.islands.world.VoidChunkGenerator;
 import com.skyrealms.platform.api.module.*;
+import com.skyrealms.platform.common.command.DynamicCommandRegistrar;
 import com.skyrealms.platform.database.DatabaseService;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -115,12 +116,18 @@ public final class IslandsModule implements SkyModule {
         Bukkit.getPluginManager().registerEvents(protection, plugin);
 
         // 5. Register Commands
-        PluginCommand islandCmd = plugin.getServer().getPluginCommand("island");
-        if (islandCmd != null) {
-            IslandCommand handler = new IslandCommand(islandManager, gui);
-            islandCmd.setExecutor(handler);
-            islandCmd.setTabCompleter(handler);
-        }
+        IslandCommand handler = new IslandCommand(islandManager, gui);
+        DynamicCommandRegistrar.register(
+                "skyrealms",
+                "island",
+                "Core SkyBlock island management command",
+                "/island [help|create|home|invite|accept|kick|leave|visit|settings|info|members|name|reset|delete|gui]",
+                java.util.List.of("is"),
+                "skyrealms.island.use",
+                org.bukkit.permissions.PermissionDefault.TRUE,
+                "§cYou do not have permission to use /island.",
+                handler
+        );
 
         state = ModuleState.ENABLED;
         context.logger().info("SkyRealms Islands module successfully enabled.");

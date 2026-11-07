@@ -39,7 +39,7 @@ public final class IslandCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (args.length == 0 || args[0].equalsIgnoreCase("menu")) {
+        if (args.length == 0 || args[0].equalsIgnoreCase("menu") || args[0].equalsIgnoreCase("gui")) {
             islandGui.openMenu(player);
             return true;
         }
@@ -247,7 +247,7 @@ public final class IslandCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
         if (args.length == 1) {
-            return List.of("create", "home", "invite", "accept", "kick", "leave", "visit", "settings", "info", "members", "delete", "menu");
+            return List.of("create", "home", "invite", "accept", "kick", "leave", "visit", "settings", "info", "members", "name", "reset", "delete", "gui", "menu");
         }
         if (args.length == 2) {
             String sub = args[0].toLowerCase(Locale.ROOT);

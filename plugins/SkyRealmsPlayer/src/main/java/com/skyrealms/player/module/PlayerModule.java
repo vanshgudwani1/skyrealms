@@ -5,6 +5,7 @@ import com.skyrealms.player.listener.PlayerConnectionListener;
 import com.skyrealms.player.repository.PlayerRepository;
 import com.skyrealms.player.service.PlayerService;
 import com.skyrealms.platform.api.module.*;
+import com.skyrealms.platform.common.command.DynamicCommandRegistrar;
 import com.skyrealms.platform.database.DatabaseService;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
@@ -71,12 +72,18 @@ public final class PlayerModule implements SkyModule {
         Bukkit.getPluginManager().registerEvents(listener, plugin);
 
         // Register Commands
-        PluginCommand profileCmd = plugin.getServer().getPluginCommand("profile");
-        if (profileCmd != null) {
-            ProfileCommand handler = new ProfileCommand(playerService);
-            profileCmd.setExecutor(handler);
-            profileCmd.setTabCompleter(handler);
-        }
+        ProfileCommand handler = new ProfileCommand(playerService);
+        DynamicCommandRegistrar.register(
+                "skyrealms",
+                "profile",
+                "View player profile and statistics",
+                "/profile [player]",
+                java.util.Collections.emptyList(),
+                "skyrealms.profile.view",
+                org.bukkit.permissions.PermissionDefault.TRUE,
+                "§cYou do not have permission to use /profile.",
+                handler
+        );
 
         state = ModuleState.ENABLED;
         context.logger().info("SkyRealms Player module enabled. Profile & session tracking active.");
