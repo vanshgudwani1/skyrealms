@@ -40,7 +40,7 @@ class FlywayMigrationTest {
     }
 
     @Test
-    @DisplayName("Should apply V1 and V2 migrations and create all player and economy tables")
+    @DisplayName("Should apply V1, V2, and V3 migrations and create all core tables")
     void shouldApplyMigrations() throws SQLException {
         DatabaseMigrationService migrationService = new DatabaseMigrationService(
                 databaseService.getDataSource(),
@@ -50,7 +50,7 @@ class FlywayMigrationTest {
         MigrateResult result = migrationService.runMigrations();
 
         assertThat(result.success).isTrue();
-        assertThat(result.migrationsExecuted).isGreaterThanOrEqualTo(2);
+        assertThat(result.migrationsExecuted).isGreaterThanOrEqualTo(3);
 
         Set<String> tables = new HashSet<>();
         try (Connection conn = databaseService.getConnection()) {
@@ -72,7 +72,12 @@ class FlywayMigrationTest {
                 "sr_idempotency_keys",
                 "sr_transactions",
                 "sr_transaction_entries",
-                "sr_economy_audit"
+                "sr_economy_audit",
+                "sr_islands",
+                "sr_island_members",
+                "sr_island_upgrades",
+                "sr_island_settings",
+                "sr_island_visits"
         );
     }
 }

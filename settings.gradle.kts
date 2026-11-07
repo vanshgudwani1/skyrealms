@@ -12,6 +12,7 @@ include("plugins:SkyRealmsCore")
 include("plugins:SkyRealmsDatabase")
 include("plugins:SkyRealmsPlayer")
 include("plugins:SkyRealmsEconomy")
+include("plugins:SkyRealmsIslands")
 
 pluginManagement {
     repositories {

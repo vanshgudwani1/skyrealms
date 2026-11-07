@@ -1,0 +1,35 @@
+# ==============================================================================
+# SkyRealms Islands Configuration
+# ==============================================================================
+
+world:
+  # Name of the dedicated void world hosting SkyBlock islands
+  name: "skyrealms_islands"
+  environment: "NORMAL"
+  default-biome: "PLAINS"
+
+grid:
+  # Distance between centers of adjacent islands in blocks
+  spacing: 500
+  # Default starting island bounding box side length (e.g., 100 means +/- 50 from center)
+  default-size: 100
+  # Island center altitude
+  center-y: 100
+
+template:
+  # Directory where future external schematics will reside
+  directory: "templates"
+  # Default starter template name
+  default: "starter_classic"
+
+upgrades:
+  size:
+    tier-2:
+      size: 150
+      cost: 1000.00
+    tier-3:
+      size: 200
+      cost: 5000.00
+    tier-4:
+      size: 250
+      cost: 25000.00

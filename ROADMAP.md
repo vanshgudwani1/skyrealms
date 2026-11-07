@@ -40,13 +40,16 @@
 
 ---
 
-### [ ] M3 — Islands System
-* [ ] Implement `SkyRealmsIslands` plugin.
-* [ ] Custom void world generator with Paper World generation API.
-* [ ] Island template schematic pasting and boundary protection.
-* [ ] Member management, permissions, and roles.
-* [ ] Island upgrades (size, generator limit, minion limit).
-* [ ] Safe island reset and visiting mechanics.
+### [x] M3 — Islands System
+* [x] Implement `SkyRealmsIslands` plugin.
+* [x] Custom void world generator with Paper World generation API (`VoidChunkGenerator`, `VoidBiomeProvider`).
+* [x] Deterministic spatial spiral grid allocator ($O(1)$ bijection and hash indexing).
+* [x] Native starter island platform and schematic builder.
+* [x] Centralized boundary protection (`IslandProtectionService` for blocks, containers, redstone, entities, pistons, fluids, explosions).
+* [x] Member management, permissions, and 4-tier roles (`LEADER`, `OFFICER`, `MEMBER`, `VISITOR`).
+* [x] Island upgrades (size, members) with Coin economy deduction.
+* [x] Safe island reset, rename, visit tracking, interactive GUI, and `/island` suite.
+* [x] Database migration V3 (`V3__create_island_tables.sql`).
 
 ---
 

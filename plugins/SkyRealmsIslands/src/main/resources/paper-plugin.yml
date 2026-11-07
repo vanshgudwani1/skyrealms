@@ -1,0 +1,25 @@
+name: SkyRealmsIslands
+version: '1.0.0'
+main: com.skyrealms.islands.SkyRealmsIslandsPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Authoritative SkyBlock island management engine for SkyRealms.
+prefix: SkyRealms-Islands
+dependencies:
+  server:
+    SkyRealmsCore:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsDatabase:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsPlayer:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsEconomy:
+      load: BEFORE
+      required: true
+      join-classpath: true
