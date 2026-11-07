@@ -129,6 +129,27 @@ public final class IslandsModule implements SkyModule {
                 handler
         );
 
+        // 6. Initialize Celestial Dragon Nest Lobby Service & Commands
+        com.skyrealms.islands.lobby.LobbyService lobbyService = new com.skyrealms.islands.lobby.LobbyService(plugin);
+        com.skyrealms.islands.lobby.LobbyListener lobbyListener = new com.skyrealms.islands.lobby.LobbyListener(plugin, lobbyService, gui);
+        Bukkit.getPluginManager().registerEvents(lobbyListener, plugin);
+
+        com.skyrealms.islands.lobby.LobbyCommand lobbyCommand = new com.skyrealms.islands.lobby.LobbyCommand(plugin, lobbyService);
+        DynamicCommandRegistrar.register(
+                "skyrealms",
+                "spawn",
+                "Teleport to the Celestial Dragon Nest Lobby",
+                "/spawn",
+                java.util.List.of("lobby", "hub"),
+                "skyrealms.spawn.use",
+                org.bukkit.permissions.PermissionDefault.TRUE,
+                "§cYou do not have permission to use /spawn.",
+                lobbyCommand
+        );
+
+        // Bootstrap lobby generation if needed
+        lobbyService.initLobby(false);
+
         state = ModuleState.ENABLED;
         context.logger().info("SkyRealms Islands module successfully enabled.");
     }

@@ -13,6 +13,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:${property("paperApiVersion")}")
     compileOnly("org.slf4j:slf4j-api:${property("slf4jVersion")}")
     compileOnly("org.jetbrains:annotations:26.0.2")
+    compileOnly(files(rootProject.file("../plugins/FastAsyncWorldEdit-Paper-2.16.2.jar")))
 
     testImplementation(project(":platform:testing"))
     testImplementation(project(":platform:common"))
