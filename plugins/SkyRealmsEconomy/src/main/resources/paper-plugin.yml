@@ -1,0 +1,24 @@
+name: SkyRealmsEconomy
+version: '1.0.0'
+main: com.skyrealms.economy.SkyRealmsEconomyPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Authoritative multi-currency ledger and Vault economy bridge for SkyRealms.
+prefix: SkyRealms-Eco
+dependencies:
+  server:
+    SkyRealmsCore:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsDatabase:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsPlayer:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    Vault:
+      load: BEFORE
+      required: false

@@ -11,6 +11,7 @@ include("platform:testing")
 include("plugins:SkyRealmsCore")
 include("plugins:SkyRealmsDatabase")
 include("plugins:SkyRealmsPlayer")
+include("plugins:SkyRealmsEconomy")
 
 pluginManagement {
     repositories {
@@ -26,5 +27,6 @@ dependencyResolutionManagement {
         mavenCentral()
         maven("https://repo.papermc.io/repository/maven-public/")
         maven("https://oss.sonatype.org/content/groups/public/")
+        maven("https://jitpack.io")
     }
 }

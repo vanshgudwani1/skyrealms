@@ -30,13 +30,13 @@
 
 ---
 
-### [ ] M2 — Authoritative Economy
-* [ ] Implement `SkyRealmsEconomy` plugin.
-* [ ] Multi-currency support (Coins, Gems).
-* [ ] Atomic transactions with idempotency keys.
-* [ ] Append-only transaction ledger and administrative audit trail.
-* [ ] Bridge Vault economy calls to internal authoritative balances.
-* [ ] Economy commands (`/balance`, `/pay`, `/eco`).
+### [x] M2 — Authoritative Economy
+* [x] Implement `SkyRealmsEconomy` plugin.
+* [x] Multi-currency support (Coins, Gems).
+* [x] Atomic transactions with idempotency keys.
+* [x] Append-only transaction ledger (`sr_transactions`, `sr_transaction_entries`) and administrative audit trail (`sr_economy_audit`).
+* [x] Bridge Vault economy calls to internal authoritative balances (`VaultEconomyBridge`).
+* [x] Economy commands (`/balance`, `/pay`, `/eco`).
 
 ---
 

@@ -40,8 +40,8 @@ class FlywayMigrationTest {
     }
 
     @Test
-    @DisplayName("Should apply V1 migration and create all player tables")
-    void shouldApplyV1Migration() throws SQLException {
+    @DisplayName("Should apply V1 and V2 migrations and create all player and economy tables")
+    void shouldApplyMigrations() throws SQLException {
         DatabaseMigrationService migrationService = new DatabaseMigrationService(
                 databaseService.getDataSource(),
                 getClass().getClassLoader()
@@ -50,7 +50,7 @@ class FlywayMigrationTest {
         MigrateResult result = migrationService.runMigrations();
 
         assertThat(result.success).isTrue();
-        assertThat(result.migrationsExecuted).isGreaterThanOrEqualTo(1);
+        assertThat(result.migrationsExecuted).isGreaterThanOrEqualTo(2);
 
         Set<String> tables = new HashSet<>();
         try (Connection conn = databaseService.getConnection()) {
@@ -66,7 +66,13 @@ class FlywayMigrationTest {
                 "sr_players",
                 "sr_player_settings",
                 "sr_player_stats",
-                "sr_player_sessions"
+                "sr_player_sessions",
+                "sr_currencies",
+                "sr_wallets",
+                "sr_idempotency_keys",
+                "sr_transactions",
+                "sr_transaction_entries",
+                "sr_economy_audit"
         );
     }
 }

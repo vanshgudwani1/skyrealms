@@ -1,0 +1,35 @@
+name: SkyRealmsEconomy
+version: '1.0.0'
+main: com.skyrealms.economy.SkyRealmsEconomyPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Authoritative multi-currency ledger and Vault economy bridge for SkyRealms.
+prefix: SkyRealms-Eco
+depend: [SkyRealmsCore, SkyRealmsDatabase, SkyRealmsPlayer]
+softdepend: [Vault]
+
+commands:
+  balance:
+    description: View your currency balances or another player's balance.
+    aliases: [bal, money]
+    permission: skyrealms.economy.balance
+    usage: /balance [player]
+  pay:
+    description: Transfer coins to another player.
+    permission: skyrealms.economy.pay
+    usage: /pay <player> <amount>
+  eco:
+    description: Administrative economy management command.
+    permission: skyrealms.admin.eco
+    usage: /eco <give|take|set> <player> <currency> <amount> [reason]
+
+permissions:
+  skyrealms.economy.balance:
+    description: Allows checking balances.
+    default: true
+  skyrealms.economy.pay:
+    description: Allows sending coins to other players.
+    default: true
+  skyrealms.admin.eco:
+    description: Administrative economy management.
+    default: op
