@@ -3,9 +3,11 @@ package com.skyrealms.islands.lobby;
 import com.skyrealms.islands.SkyRealmsIslandsPlugin;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -32,6 +34,19 @@ public final class LobbyCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+        if (args.length > 0 && args[0].equalsIgnoreCase("holograms")) {
+            if (!sender.hasPermission("skyrealms.admin")) {
+                sender.sendMessage(Component.text("You do not have permission to execute this command.", NamedTextColor.RED));
+                return true;
+            }
+            World world = Bukkit.getWorld("world");
+            if (world != null) {
+                lobbyService.getHologramService().spawnAllHolograms(world);
+                sender.sendMessage(Component.text("✔ Celestial TextDisplay holograms refreshed!", NamedTextColor.GREEN));
+            }
+            return true;
+        }
+
         if (args.length > 0 && args[0].equalsIgnoreCase("paste")) {
             if (!sender.hasPermission("skyrealms.admin")) {
                 sender.sendMessage(Component.text("You do not have permission to execute this command.", NamedTextColor.RED));
@@ -69,7 +84,7 @@ public final class LobbyCommand implements CommandExecutor, TabCompleter {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (args.length == 1 && sender.hasPermission("skyrealms.admin")) {
-            return List.of("paste");
+            return List.of("holograms", "paste");
         }
         return List.of();
     }
