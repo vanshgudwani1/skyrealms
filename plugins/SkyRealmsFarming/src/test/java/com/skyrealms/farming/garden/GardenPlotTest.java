@@ -29,12 +29,32 @@ class GardenPlotTest {
 
         for (int i = 1; i <= 8; i++) {
             GardenPlot plot = new GardenPlot(islandId, i, true, "WHEAT", "BALANCED", 1.0, 1.0, 1.0);
-            assertThat(plot.getRelativeCenterZ()).isEqualTo(-8);
+            assertThat(plot.getRelativeCenterZ()).isEqualTo(-48);
         }
 
         for (int i = 9; i <= 16; i++) {
             GardenPlot plot = new GardenPlot(islandId, i, true, "WHEAT", "BALANCED", 1.0, 1.0, 1.0);
-            assertThat(plot.getRelativeCenterZ()).isEqualTo(8);
+            assertThat(plot.getRelativeCenterZ()).isEqualTo(48);
+        }
+    }
+
+    @Test
+    @DisplayName("Each plot must be exactly 4x4 chunks (64x64 blocks = 4,096 blocks)")
+    void eachPlotMustBe4x4Chunks() {
+        UUID islandId = UUID.randomUUID();
+
+        for (int i = 1; i <= 16; i++) {
+            GardenPlot plot = new GardenPlot(islandId, i, true, "WHEAT", "BALANCED", 1.0, 1.0, 1.0);
+            int width = plot.getMaxX(0) - plot.getMinX(0) + 1;
+            int depth = plot.getMaxZ(0) - plot.getMinZ(0) + 1;
+
+            assertThat(width)
+                    .withFailMessage("Plot %d width was %d, expected 64 (4 chunks)", i, width)
+                    .isEqualTo(64);
+            assertThat(depth)
+                    .withFailMessage("Plot %d depth was %d, expected 64 (4 chunks)", i, depth)
+                    .isEqualTo(64);
+            assertThat(width * depth).isEqualTo(4096);
         }
     }
 
@@ -54,8 +74,8 @@ class GardenPlotTest {
 
             for (int j = i + 1; j <= 16; j++) {
                 GardenPlot p2 = new GardenPlot(islandId, j, true, "WHEAT", "BALANCED", 1.0, 1.0, 1.0);
-                boolean xOverlap = p1.getMinX(0) < p2.getMaxX(0) && p1.getMaxX(0) > p2.getMinX(0);
-                boolean zOverlap = p1.getMinZ(0) < p2.getMaxZ(0) && p1.getMaxZ(0) > p2.getMinZ(0);
+                boolean xOverlap = p1.getMinX(0) <= p2.getMaxX(0) && p1.getMaxX(0) >= p2.getMinX(0);
+                boolean zOverlap = p1.getMinZ(0) <= p2.getMaxZ(0) && p1.getMaxZ(0) >= p2.getMinZ(0);
 
                 assertThat(xOverlap && zOverlap)
                         .withFailMessage("Plot %d and %d overlap!", i, j)
@@ -74,8 +94,8 @@ class GardenPlotTest {
         int cz = plot.getCenterZ(0);
 
         assertThat(plot.contains(0, 0, cx, cz)).isTrue();
-        assertThat(plot.contains(0, 0, cx + 2, cz - 2)).isTrue();
-        assertThat(plot.contains(0, 0, cx + 10, cz)).isFalse();
+        assertThat(plot.contains(0, 0, cx + 20, cz - 20)).isTrue();
+        assertThat(plot.contains(0, 0, cx + 40, cz)).isFalse();
         assertThat(plot.contains(0, 0, 0, 0)).isFalse();
     }
 }

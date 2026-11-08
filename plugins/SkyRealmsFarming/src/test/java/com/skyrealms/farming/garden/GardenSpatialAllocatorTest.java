@@ -21,6 +21,20 @@ class GardenSpatialAllocatorTest {
     }
 
     @Test
+    @DisplayName("Default constructor should configure 1024 spacing and 768 region size")
+    void defaultConstructorShouldSetExpectedDimensions() {
+        GardenSpatialAllocator allocator = new GardenSpatialAllocator();
+        assertThat(allocator.spacing()).isEqualTo(1024);
+        assertThat(allocator.regionSize()).isEqualTo(768);
+
+        GardenSpatialAllocator.RegionBounds bounds = allocator.getRegionBounds(0);
+        assertThat(bounds.minX()).isEqualTo(-384);
+        assertThat(bounds.maxX()).isEqualTo(384);
+        assertThat(bounds.minZ()).isEqualTo(-384);
+        assertThat(bounds.maxZ()).isEqualTo(384);
+    }
+
+    @Test
     @DisplayName("Index 0 should map to origin (0, 0)")
     void indexZeroShouldMapToOrigin() {
         GardenSpatialAllocator allocator = new GardenSpatialAllocator(512, 256);

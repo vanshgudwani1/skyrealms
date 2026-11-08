@@ -2,14 +2,15 @@ package com.skyrealms.farming.garden;
 
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Objects;
-
 /**
  * Deterministic collision-free spatial grid allocator for SkyRealms Garden.
  * Maps sequential island indexes to a 2D square spiral coordinate grid
- * with configurable spacing (default 512 blocks) and region size (default 256x256).
+ * with configurable spacing (default 1024 blocks) and region size (default 768x768).
  */
 public final class GardenSpatialAllocator {
+
+    public static final int DEFAULT_SPACING = 1024;
+    public static final int DEFAULT_REGION_SIZE = 768;
 
     private final int spacing;
     private final int regionSize;
@@ -26,7 +27,7 @@ public final class GardenSpatialAllocator {
     }
 
     public GardenSpatialAllocator() {
-        this(512, 256);
+        this(DEFAULT_SPACING, DEFAULT_REGION_SIZE);
     }
 
     public record GridCoord(int x, int z) {}

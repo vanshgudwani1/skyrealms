@@ -144,11 +144,18 @@ public final class GardenProtectionListener implements Listener {
             }
             // If unlocked: allow harvesting crops!
         } else {
-            // Outside of plots: protect conservatory glass, paths, and shrine structure
+            // Outside of plots: protect conservatory glass, paths, arches, and sanctuary structure
             Material mat = block.getType();
-            if (mat == Material.GLASS || mat == Material.TINTED_GLASS || mat == Material.DARK_OAK_WOOD
-                    || mat == Material.STONE_BRICKS || mat == Material.SMOOTH_STONE || mat == Material.QUARTZ_BLOCK
-                    || mat == Material.QUARTZ_PILLAR || mat == Material.LECTERN || mat == Material.SEA_LANTERN) {
+            if (mat == Material.GLASS || mat == Material.TINTED_GLASS || mat == Material.WHITE_STAINED_GLASS
+                    || mat == Material.LIGHT_BLUE_STAINED_GLASS || mat == Material.DARK_OAK_WOOD
+                    || mat == Material.STONE_BRICKS || mat == Material.STONE_BRICK_SLAB || mat == Material.STONE_BRICK_STAIRS
+                    || mat == Material.SMOOTH_STONE || mat == Material.SMOOTH_STONE_SLAB || mat == Material.POLISHED_ANDESITE
+                    || mat == Material.POLISHED_ANDESITE_SLAB || mat == Material.POLISHED_DEEPSLATE
+                    || mat == Material.POLISHED_DEEPSLATE_WALL || mat == Material.POLISHED_DEEPSLATE_STAIRS
+                    || mat == Material.DEEPSLATE_TILES || mat == Material.CUT_COPPER || mat == Material.WAXED_CUT_COPPER
+                    || mat == Material.QUARTZ_BLOCK || mat == Material.QUARTZ_PILLAR || mat == Material.CHISELED_QUARTZ_BLOCK
+                    || mat == Material.LECTERN || mat == Material.SEA_LANTERN || mat == Material.LANTERN
+                    || mat == Material.PRISMARINE || mat == Material.DARK_PRISMARINE) {
                 event.setCancelled(true);
                 player.sendMessage(Component.text("⛔ You cannot dismantle Greenhouse Dome structural architecture.", NamedTextColor.RED));
             }

@@ -132,20 +132,20 @@ public final class Garden {
     }
 
     /**
-     * Entrance arrival spawn point (facing East down the grand boulevard).
+     * Entrance arrival spawn point at the West Grand Pavilion (facing East down the grand boulevard).
      */
     @NotNull
     public Location getSpawnLocation() {
         World world = Bukkit.getWorld(worldName);
-        return new Location(world, centerX - 25.5, centerY + 1.0, centerZ + 0.5, -90.0f, 0.0f);
+        return new Location(world, centerX - 288.5, centerY + 1.0, centerZ + 0.5, -90.0f, 0.0f);
     }
 
     /**
-     * Elarion the Garden Keeper's gazebo location.
+     * Elarion the Garden Keeper's dais location at the East Botanical Sanctuary.
      */
     @NotNull
     public Location getKeeperLocation() {
         World world = Bukkit.getWorld(worldName);
-        return new Location(world, centerX + 26.5, centerY + 1.0, centerZ + 0.5, 90.0f, 0.0f);
+        return new Location(world, centerX + 288.5, centerY + 1.0, centerZ + 0.5, 90.0f, 0.0f);
     }
 }

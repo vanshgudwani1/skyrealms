@@ -14,10 +14,18 @@ import java.util.UUID;
  */
 public final class GardenPlot {
 
-    private static final int[] COL_OFFSETS_X = {-24, -17, -10, -3, 4, 11, 18, 25};
-    private static final int NORTH_ROW_Z = -8;
-    private static final int SOUTH_ROW_Z = 8;
-    private static final int HALF_PLOT_SIZE = 3; // 7x7 total footprint (5x5 farmland inside)
+    // 16 plots arranged in 2 rows of 8 columns.
+    // Each plot is at least 4x4 chunks (64x64 blocks = 4,096 blocks).
+    // 8 columns span X in [-256, 255] (32 chunks).
+    private static final int[] COL_OFFSETS_X = {-224, -160, -96, -32, 32, 96, 160, 224};
+    // 2 rows: North row (plots 1-8) in Z [-80, -17], South row (plots 9-16) in Z [16, 79].
+    // Grand Central Boulevard spans Z [-16, 15] (32 blocks wide, 2 chunks).
+    private static final int NORTH_ROW_Z = -48;
+    private static final int SOUTH_ROW_Z = 48;
+    public static final int PLOT_WIDTH = 64;
+    public static final int PLOT_DEPTH = 64;
+    private static final int HALF_SIZE_NEG = 32;
+    private static final int HALF_SIZE_POS = 31;
 
     private final UUID islandId;
     private final int plotIndex;
@@ -111,19 +119,19 @@ public final class GardenPlot {
     }
 
     public int getMinX(int gardenCenterX) {
-        return getCenterX(gardenCenterX) - HALF_PLOT_SIZE;
+        return getCenterX(gardenCenterX) - HALF_SIZE_NEG;
     }
 
     public int getMaxX(int gardenCenterX) {
-        return getCenterX(gardenCenterX) + HALF_PLOT_SIZE;
+        return getCenterX(gardenCenterX) + HALF_SIZE_POS;
     }
 
     public int getMinZ(int gardenCenterZ) {
-        return getCenterZ(gardenCenterZ) - HALF_PLOT_SIZE;
+        return getCenterZ(gardenCenterZ) - HALF_SIZE_NEG;
     }
 
     public int getMaxZ(int gardenCenterZ) {
-        return getCenterZ(gardenCenterZ) + HALF_PLOT_SIZE;
+        return getCenterZ(gardenCenterZ) + HALF_SIZE_POS;
     }
 
     public boolean contains(int gardenCenterX, int gardenCenterZ, int blockX, int blockZ) {
