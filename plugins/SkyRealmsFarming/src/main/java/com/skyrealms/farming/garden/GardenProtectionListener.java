@@ -147,7 +147,7 @@ public final class GardenProtectionListener implements Listener {
             // Outside of plots: protect conservatory glass, paths, arches, and sanctuary structure
             Material mat = block.getType();
             if (mat == Material.GLASS || mat == Material.TINTED_GLASS || mat == Material.WHITE_STAINED_GLASS
-                    || mat == Material.LIGHT_BLUE_STAINED_GLASS || mat == Material.DARK_OAK_WOOD
+                    || mat == Material.LIGHT_GRAY_STAINED_GLASS || mat == Material.LIGHT_BLUE_STAINED_GLASS || mat == Material.DARK_OAK_WOOD
                     || mat == Material.STONE_BRICKS || mat == Material.STONE_BRICK_SLAB || mat == Material.STONE_BRICK_STAIRS
                     || mat == Material.SMOOTH_STONE || mat == Material.SMOOTH_STONE_SLAB || mat == Material.POLISHED_ANDESITE
                     || mat == Material.POLISHED_ANDESITE_SLAB || mat == Material.POLISHED_DEEPSLATE
