@@ -6,7 +6,8 @@ generator:
   default:
     enabled: true
     max-generators-per-island: 5
-    base-regeneration-delay-ticks: 30
+    base-regeneration-delay-ticks: 200
+    min-regeneration-delay-ticks: 40
     require-island: true
     core-material: LODESTONE
 
@@ -52,7 +53,7 @@ generator:
       max-level: 10
       base-cost: 1000
       cost-multiplier: 1.8
-      ticks-reduction-per-level: 2
+      ticks-reduction-per-level: 12
 
     yield:
       enabled: true

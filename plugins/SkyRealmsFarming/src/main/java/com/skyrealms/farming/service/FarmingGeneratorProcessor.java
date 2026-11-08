@@ -17,13 +17,19 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.SQLException;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Handles the harvest, drop evaluation, anti-duplication locking, combo streaks, and regeneration cycle.
@@ -41,6 +47,10 @@ public final class FarmingGeneratorProcessor {
     private final OverclockManager overclockManager;
     private final HarvestComboTracker comboTracker;
     private final Random random = new Random();
+
+    private final Map<UUID, BukkitTask> regenCountdownTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, AtomicInteger> regenSecondsRemaining = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> regenTotalSeconds = new ConcurrentHashMap<>();
 
     public FarmingGeneratorProcessor(
             @NotNull Plugin plugin,
@@ -158,8 +168,12 @@ public final class FarmingGeneratorProcessor {
 
         // 8. Schedule Regeneration Loop
         int speedUpgradeLevel = generator.getUpgradeLevel(GeneratorUpgrade.KEY_SPEED);
-        int baseDelay = Math.max(6, 30 - (speedUpgradeLevel * 2));
-        int regenDelayTicks = overclocked ? Math.max(4, baseDelay / 2) : baseDelay;
+        int baseDelay = plugin.getConfig().getInt("generator.default.base-regeneration-delay-ticks", 200);
+        int reductionPerLevel = plugin.getConfig().getInt("generator.upgrades.speed.ticks-reduction-per-level", 12);
+        int minDelay = plugin.getConfig().getInt("generator.default.min-regeneration-delay-ticks", 40);
+
+        int calculatedDelay = Math.max(minDelay, baseDelay - (speedUpgradeLevel * reductionPerLevel));
+        int regenDelayTicks = overclocked ? Math.max(minDelay / 2, calculatedDelay / 2) : calculatedDelay;
 
         // Reset block to seedling
         if (data instanceof Ageable ageable) {
@@ -169,10 +183,48 @@ public final class FarmingGeneratorProcessor {
             block.setType(Material.AIR, false);
         }
 
-        // Update DecentHologram status
-        if (!overclocked) {
-            String timeSec = String.format("%.1f", regenDelayTicks / 20.0);
-            hologramService.updateStatus(generator, "&e⏳ REGENERATING &8[&a■■■■&7□□&8] &b" + timeSec + "s");
+        // Live ticking DecentHologram countdown
+        int totalSec = Math.max(1, (int) Math.ceil(regenDelayTicks / 20.0));
+        regenTotalSeconds.put(generator.generatorId(), totalSec);
+        regenSecondsRemaining.compute(generator.generatorId(), (k, v) -> {
+            if (v == null) return new AtomicInteger(totalSec);
+            v.set(Math.max(v.get(), totalSec));
+            return v;
+        });
+
+        if (!overclockManager.isOverclocked(generator)) {
+            BukkitTask existing = regenCountdownTasks.get(generator.generatorId());
+            if (existing == null || existing.isCancelled()) {
+                BukkitTask task = new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        if (overclockManager.isOverclocked(generator)) {
+                            cancel();
+                            regenCountdownTasks.remove(generator.generatorId());
+                            return;
+                        }
+                        AtomicInteger sec = regenSecondsRemaining.get(generator.generatorId());
+                        Integer total = regenTotalSeconds.get(generator.generatorId());
+                        if (sec == null || total == null || sec.get() <= 0) {
+                            hologramService.updateStatus(generator, "&a● READY TO HARVEST");
+                            cancel();
+                            regenCountdownTasks.remove(generator.generatorId());
+                            return;
+                        }
+                        int rem = sec.decrementAndGet();
+                        if (rem <= 0) {
+                            hologramService.updateStatus(generator, "&a● READY TO HARVEST");
+                            cancel();
+                            regenCountdownTasks.remove(generator.generatorId());
+                            return;
+                        }
+                        double pct = 1.0 - ((double) rem / Math.max(1, total));
+                        String bar = buildProgressBar(pct, 6);
+                        hologramService.updateStatus(generator, "&e⏳ REGENERATING &8[" + bar + "&8] &b" + rem + "s");
+                    }
+                }.runTaskTimer(plugin, 0L, 20L);
+                regenCountdownTasks.put(generator.generatorId(), task);
+            }
         }
 
         scheduleRegeneration(generator, node, block, regenDelayTicks);
@@ -185,6 +237,39 @@ public final class FarmingGeneratorProcessor {
             @NotNull Block block,
             int delayTicks
     ) {
+        FarmingGeneratorTier tier = generator.tier();
+        Material targetMaterial = tier.primaryDropMaterial() == Material.WHEAT_SEEDS ? Material.WHEAT :
+                (tier == FarmingGeneratorTier.TIER_1_WHEAT ? Material.WHEAT :
+                        (tier == FarmingGeneratorTier.TIER_2_ROOT ? Material.CARROTS :
+                                (tier == FarmingGeneratorTier.TIER_3_FRUIT ? Material.MELON :
+                                        (tier == FarmingGeneratorTier.TIER_4_TROPICAL ? Material.SUGAR_CANE : Material.NETHER_WART))));
+
+        // Staged visual growth: gradually advance crop age so growth looks natural and rewarding
+        BlockData initData = block.getBlockData();
+        if (initData instanceof Ageable ageable && delayTicks >= 60) {
+            int maxAge = ageable.getMaximumAge();
+            int stage1Age = Math.min(maxAge - 1, Math.max(1, (int) Math.round(maxAge * 0.33)));
+            int stage2Age = Math.min(maxAge - 1, Math.max(2, (int) Math.round(maxAge * 0.66)));
+
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (block.getWorld().isChunkLoaded(block.getX() >> 4, block.getZ() >> 4)) {
+                    if (block.getBlockData() instanceof Ageable a) {
+                        a.setAge(stage1Age);
+                        block.setBlockData(a, false);
+                    }
+                }
+            }, delayTicks / 3);
+
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (block.getWorld().isChunkLoaded(block.getX() >> 4, block.getZ() >> 4)) {
+                    if (block.getBlockData() instanceof Ageable a) {
+                        a.setAge(stage2Age);
+                        block.setBlockData(a, false);
+                    }
+                }
+            }, (delayTicks * 2) / 3);
+        }
+
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             try {
                 if (!block.getWorld().isChunkLoaded(block.getX() >> 4, block.getZ() >> 4)) {
@@ -206,13 +291,6 @@ public final class FarmingGeneratorProcessor {
                     return;
                 }
 
-                FarmingGeneratorTier tier = generator.tier();
-                Material targetMaterial = tier.primaryDropMaterial() == Material.WHEAT_SEEDS ? Material.WHEAT :
-                        (tier == FarmingGeneratorTier.TIER_1_WHEAT ? Material.WHEAT :
-                                (tier == FarmingGeneratorTier.TIER_2_ROOT ? Material.CARROTS :
-                                        (tier == FarmingGeneratorTier.TIER_3_FRUIT ? Material.MELON :
-                                                (tier == FarmingGeneratorTier.TIER_4_TROPICAL ? Material.SUGAR_CANE : Material.NETHER_WART))));
-
                 FarmingCropGenerateEvent generateEvent = new FarmingCropGenerateEvent(generator, node, targetMaterial);
                 eventBus.publishAsync(generateEvent);
 
@@ -227,15 +305,16 @@ public final class FarmingGeneratorProcessor {
                     Location loc = block.getLocation().add(0.5, 0.4, 0.5);
                     block.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, loc, 8, 0.3, 0.2, 0.3, 0.0);
                 }
-
-                // If not overclocked, restore status line to READY
-                if (!overclockManager.isOverclocked(generator)) {
-                    hologramService.updateStatus(generator, "&a● READY TO HARVEST");
-                }
             } finally {
                 node.releaseLock();
             }
         }, delayTicks);
+    }
+
+    private String buildProgressBar(double progress, int totalSegments) {
+        int filled = (int) Math.round(progress * totalSegments);
+        filled = Math.max(0, Math.min(totalSegments, filled));
+        return "&a" + "■".repeat(filled) + "&7" + "□".repeat(totalSegments - filled);
     }
 
     public void handleIllegitimateDisturbance(@NotNull FarmingGenerator generator, @NotNull CropNode node, @NotNull Block block) {
