@@ -63,6 +63,7 @@ public final class IslandCommand implements CommandExecutor, TabCompleter {
                         });
             }
             case "home" -> islandService.teleportHome(player);
+            case "farm", "garden" -> player.performCommand("garden home");
             case "border" -> {
                 Optional<Island> opt = islandService.getIslandByPlayer(player.getUniqueId());
                 if (opt.isEmpty()) {
@@ -281,7 +282,7 @@ public final class IslandCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
         if (args.length == 1) {
-            return List.of("create", "home", "invite", "accept", "kick", "leave", "visit", "settings", "info", "members", "name", "reset", "delete", "gui", "menu", "border", "upgrades", "warps");
+            return List.of("create", "home", "farm", "garden", "invite", "accept", "kick", "leave", "visit", "settings", "info", "members", "name", "reset", "delete", "gui", "menu", "border", "upgrades", "warps");
         }
         if (args.length == 2) {
             String sub = args[0].toLowerCase(Locale.ROOT);

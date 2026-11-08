@@ -63,7 +63,7 @@ public final class FarmCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 0) {
-            FarmingGui.openMainMenu(player, farmingService);
+            player.performCommand("garden home");
             return true;
         }
 
@@ -71,11 +71,12 @@ public final class FarmCommand implements CommandExecutor, TabCompleter {
         switch (sub) {
             case "help" -> sendHelp(player);
             case "stats" -> handleStats(player, args);
-            case "core" -> handleCore(player, args);
-            case "generators" -> handleGenerators(player);
-            case "generator" -> handleGeneratorSubcommand(player, args);
+            case "core", "generators", "generator" -> {
+                player.sendMessage(Component.text("🌾 Farming Generators have been retired in favor of the SkyRealms Garden!", NamedTextColor.GOLD, TextDecoration.BOLD));
+                player.sendMessage(Component.text("Type /garden home or /is farm to enter your greenhouse dome.", NamedTextColor.YELLOW));
+            }
             case "admin" -> handleAdmin(player, args);
-            default -> player.sendMessage(Component.text("Unknown subcommand. Type /farm help for options.", NamedTextColor.RED));
+            default -> player.sendMessage(Component.text("Unknown subcommand. Type /farm help for options or /garden for the Garden menu.", NamedTextColor.RED));
         }
         return true;
     }
@@ -83,14 +84,10 @@ public final class FarmCommand implements CommandExecutor, TabCompleter {
     private void sendHelp(CommandSender sender) {
         sender.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.GOLD, TextDecoration.STRIKETHROUGH));
         sender.sendMessage(Component.text("🌾 SkyRealms Farming Commands", NamedTextColor.GREEN, TextDecoration.BOLD));
-        sender.sendMessage(Component.text("/farm ", NamedTextColor.YELLOW).append(Component.text("— Open 54-slot Farming Menu", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/farm help ", NamedTextColor.YELLOW).append(Component.text("— Display this command guide", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/farm core [tier] ", NamedTextColor.YELLOW).append(Component.text("— Obtain a Farming Generator Core", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/farm (or /garden) ", NamedTextColor.YELLOW).append(Component.text("— Teleport to your Greenhouse Dome", NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("/farm stats [player] ", NamedTextColor.YELLOW).append(Component.text("— View Farming Level and XP stats", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/farm generators ", NamedTextColor.YELLOW).append(Component.text("— List active generators on your island", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/farm generator info ", NamedTextColor.YELLOW).append(Component.text("— Inspect generator at targeted block", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/farm generator upgrade ", NamedTextColor.YELLOW).append(Component.text("— Open upgrade view for targeted generator", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/farm generator remove ", NamedTextColor.YELLOW).append(Component.text("— Deactivate and refund targeted generator", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/garden plots ", NamedTextColor.YELLOW).append(Component.text("— View status of 16 Crop Plots", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/garden info ", NamedTextColor.YELLOW).append(Component.text("— View Garden coordinates & dimensions", NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.GOLD, TextDecoration.STRIKETHROUGH));
     }
 

@@ -91,53 +91,64 @@ Minecraft Paper 1.21.1 Runtime (Java 21 LTS)
 * **Commands:** `/island` (`/is`), `/spawn`, `/lobby`, `/hub`.
 
 ### F. `SkyRealmsFarming` (`plugins:SkyRealmsFarming`)
-* **Role:** Physical structure-based Farming Generator engine, crop mutation system, progression leveling, crop collections, and economy upgrades.
-* **Commands:** `/farm`, `/farm stats`, `/farm generators`, `/farm generator info`, `/farm generator upgrade`, `/farm generator remove`.
+* **Role:** Natural progression SkyRealms Garden engine, shared void world (`skyrealms_garden`), $256 \times 256$ deterministic spatial region allocator, glass conservatory greenhouse domes, 16 crop plots in 2 rows $\times$ 8 columns, right-click fast harvest, crop collections, progression leveling, and complete retirement of legacy generator mechanics.
+* **Commands:** `/garden` (`/garden home`, `/garden leave`, `/garden info`, `/garden plots`, `/garden admin`), `/is farm`, `/farm stats`, `/farm help`.
 
 ---
 
-## 4. Milestone 4: Farming Engine Specifications
+## 4. SkyRealms Garden Engine Architecture (Milestones G1 & G2)
 
-### A. Structure-Based Farming Generator
-* **Physical Structure**:
-  * **Central Core**: Lodestone block placed by the player as the anchor.
-  * **Irrigation**: Water source block within 2 blocks of farmland.
-  * **Farmland & Soil**: Connected farmland (or sand/soul sand depending on tier) in a $5 \times 5$ radius with supporting blocks beneath.
-  * **Activation**: Right-clicking the Lodestone core validates physical structure, verifies island membership, and plants initial mature crops with beacon activation fanfare.
-* **Progression Tiers**:
-  * `TIER_1_WHEAT`: Wheat & Seeds (Level 1 required, base XP 15)
-  * `TIER_2_ROOT`: Carrots & Potatoes (Level 5 required, base XP 25)
-  * `TIER_3_FRUIT`: Pumpkins & Melons (Level 12 required, base XP 45)
-  * `TIER_4_TROPICAL`: Sugar Cane & Cactus (Level 20 required, base XP 75)
-  * `TIER_5_MYSTIC`: Nether Wart, Chorus, Glow Berries (Level 30 required, base XP 150)
+### A. Legacy Farming Generator Retirement & Data Preservation
+* **Retirement Policy:**
+  * All automatic generator crop spawning loops (`FarmingGeneratorProcessor`) and auto-terraforming sequences (`FarmingTerraformService`) have been retired.
+  * Attempting to place a custom Farming Core item (`FarmingCoreItemFactory.isFarmingCore`) is intercepted and cancelled with a helpful notification directing players to `/garden home` or `/is farm`.
+  * Right-clicking or breaking generator nodes has been disconnected from generator mechanics; crops in gardens grow and harvest naturally according to vanilla rules.
+  * **Zero Data Loss Guarantee:** Legacy tables (`sr_farming_generators`, `sr_farming_generator_upgrades`, `sr_farming_player_progress`, `sr_farming_crop_collections`, `sr_farming_mutation_discoveries`) remain intact in PostgreSQL / H2 for auditability, and player Farming XP, levels, and collections carry forward seamlessly into the new Garden system.
 
-### B. Physical Structure, Custom Core & "Earth Bloom" Auto-Terraforming
-* **Custom Core Item**: Specialized Lodestone core (`FarmingCoreItemFactory`) serialized with PDC tags:
-  * `skyrealms:farming_core`: Identity byte flag.
-  * `skyrealms:core_tier`: Stored tier string (`TIER_1_WHEAT` through `TIER_5_MYSTIC`).
-  * `skyrealms:core_upgrades`: Compound tag preserving all purchased upgrade levels across dismantle and re-placement.
-* **Strict 5x5 Plane Validation**:
-  * Core placement requires a flat $5 \times 5$ plane of `DIRT` / `GRASS_BLOCK` on the player's island.
-  * If uneven, obstructed, or floating, placement is cancelled, `ENTITY_VILLAGER_NO` sound plays, and red dust particles highlight invalid block positions.
-* **Staged "Earth Bloom" Sequence (`FarmingTerraformService`)**:
-  * **Phase 1 (Tick 0)**: Beacon chime fanfare (`BLOCK_BEACON_ACTIVATE`) and cherry petal vortex (`CHERRY_LEAVES`).
-  * **Phase 2 (Tick 2)**: Sub-surface water irrigation block placed invisibly directly beneath the core at $(X_c, Y_c - 1, Z_c)$ for full 5x5 farmland hydration.
-  * **Phase 3 (Ticks 5-10)**: Concentric outward tilling ripples convert all 24 surrounding dirt blocks into fertile `FARMLAND` with hoe sounds (`ITEM_HOE_TILL`).
-  * **Phase 4 (Tick 15)**: Seeds sprout and instantly bloom to full maturity with villager happy particles (`HAPPY_VILLAGER`).
-  * **Phase 5 (Tick 22)**: DecentHologram registers above the core, fires an end rod flare, and generator enters active status.
+### B. Shared Garden World (`skyrealms_garden`) & Spatial Region Allocation
+* **Dedicated World Architecture:** Single shared Paper world (`skyrealms_garden`) using `VoidChunkGenerator` and `VoidBiomeProvider(Biome.PLAINS)`. World rules locked at noon (6000 ticks), daylight cycle disabled, clear weather, and mob spawning disabled.
+* **Deterministic Spiral Allocator (`GardenSpatialAllocator`):**
+  * Spacing: 512 blocks center-to-center.
+  * Region Size: $256 \times 256$ blocks ($[-128, +128]$ from anchor).
+  * 256-block void gap buffer between adjacent gardens ensuring zero spatial overlap.
+  * $O(1)$ coordinate bijection mapping sequential island indexes to unique spiral coordinates and reversing block coordinates to nearest grid anchors.
 
-### C. DecentHolograms (DHAPI) Visual Engine & Overclocking
-* **3D Rotating Item Icon**: DecentHolograms line `#ICON: <MATERIAL>` displays an authentic spinning 3D crop icon above the core.
-* **Gradient Headers**: Hex gradient title `<#gradient:#FFB7B2:#FF69B4>` dynamically reflecting generator tier.
-* **Live Regeneration Progress Bar**: As crops regrow, hologram displays animated countdown progress bars (`⏳ REGENERATING [■■■■□□] 1.8s`).
-* **Bio-Fuel Overclocking (`OverclockManager`)**:
-  * Right-clicking the core with **Bone Meal** activates 5-minute Overclocked Mode ($2\times$ production speed).
-  * Hologram switches to animated `<#rainbow>` header with active countdown timer and spark particles.
-* **Harvest Combo Streak Engine (`HarvestComboTracker`)**:
-  * Chaining harvests within 4 seconds builds a streak multiplier up to $3.0\times$.
-  * Plays pitch-ascending musical harp notes with combo titles in action bar.
-* **Right-Click Fast Harvest**: Players can right-click fully grown crops to harvest instantly without breaking tool durability.
-* **In-Place Tier Evolution & Safe Dismantling**:
+### C. Greenhouse Dome Procedural Generation (`GardenDomeGenerator`)
+* **Conservatory Architecture:**
+  * Radius: 34 blocks with vaulted tinted glass canopy and dark oak framing ribs reaching up to 23 blocks high.
+  * Perimeter stone brick base walls and decorative landscaping (grass, moss, flowering azalea).
+  * Central Grand Boulevard (East-West): 7-block wide polished andesite and smooth stone thoroughfare with recessed sea lanterns for warm, ambient lighting.
+  * Entrance Plaza (West end): Arrival spawn dais, lanterns, dark oak portico facing East down the boulevard.
+  * Garden Keeper Shrine (East end): Raised quartz dais with four quartz pillars, sea lantern beacons, and central lectern altar for Elarion and divine offerings.
+  * 4 Specialized Corner Alcoves: Research Library (NW), Equipment Workshop (SW), Botanical Showcase Dais (NE), Divine Altar (SE).
+  * **16 Crop Plots (2 Rows $\times$ 8 Columns):**
+    * North Row (Plots 1–8) at $Z = -8$; South Row (Plots 9–16) at $Z = +8$.
+    * Columns 1–8 spaced along $X$ at $\{-24, -17, -10, -3, 4, 11, 18, 25\}$.
+    * Each plot features a $7 \times 7$ footprint with polished andesite borders, facing entrance opening, and internal $5 \times 5$ fertile farmland with sub-surface water irrigation.
+    * Plot 1 (starter plot) generates pre-planted with mature wheat for immediate first harvest onboarding; Plots 2–16 unlock progressively.
+
+### D. Natural Farming Engine (`NaturalFarmingEngine` & `NaturalFarmingListener`)
+* **Supported Crop Types:** Wheat, Carrots, Potatoes, Beetroots, Melons, Pumpkins, Sugar Cane, Cactus, Cocoa Beans, Nether Wart.
+* **Maturity & Harvest Validation:**
+  * Ageable crops require maximum age (`Ageable.getAge() == Ageable.getMaximumAge()`).
+  * Stem fruits (Melon & Pumpkin) and vertical crops (Sugar Cane & Cactus) are tracked by the anti-exploit engine to reject player-placed blocks from granting XP or collections.
+  * Right-click fast harvest deposits drops directly into player inventory, resets crop age to 0 (or replants), plays villager happy particles, and sends action bar feedback.
+  * Configurable Farming XP awarded per crop type (Wheat: 10, Carrots: 12, Potatoes: 12, Beetroots: 15, Melons: 18, Pumpkins: 20, Sugar Cane: 14, Cactus: 16, Cocoa: 15, Nether Wart: 25).
+  * Increments crop collections in `sr_farming_crop_collections` and fires `GardenCropHarvestEvent`.
+
+### E. Region Protection & Boundary Containment (`GardenProtectionListener`)
+* **Boundary Enforcement:** Players cannot walk, fly, ender pearl, or chorus-fruit outside their $256 \times 256$ garden region. Attempting to cross pushes the player gently back towards the center with warning sound and message.
+* **Anti-Grief Architecture:** Conservatory glass, structural framing, pathways, and shrine blocks cannot be broken by regular island members.
+* **Plot Permissions:** Breaking or planting in locked plots is blocked with an action bar prompt directing the player to `/garden plots`.
+* **Farmland Shield:** Trampling farmland by players or mobs is cancelled, and farmland moisture loss is prevented.
+
+### F. Navigation & Warmup Integration
+* **Commands:**
+  * `/garden home` (or `/is farm`): Teleports to Garden entrance dais with 3-second particle warmup aura.
+  * `/garden leave`: Teleports back to Island Home with 3-second warmup aura.
+  * `/garden info`: Displays island name, region index, center coordinates, and unlocked plots.
+  * `/garden plots`: Displays interactive ASCII overview of all 16 plots across both rows.
+  * `/garden admin tp <player>` & `/garden admin unlockplot <player> <1-16>`: Administrative management.
   * Accessible directly from the 54-slot `/farm` GUI or by sneak-breaking the core.
   * Evolving upgrades crops in-place to higher tiers when meeting level and coin requirements.
   * Dismantling refunds the custom core item with all upgrades preserved.

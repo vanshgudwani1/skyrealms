@@ -71,4 +71,7 @@ public interface FarmingService {
 
     @NotNull
     CropMutationEngine mutationEngine();
+
+    @NotNull
+    com.skyrealms.farming.garden.GardenService gardenService();
 }

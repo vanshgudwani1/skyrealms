@@ -104,3 +104,44 @@ generator:
       magical:
         enabled: true
         weight: 5
+
+
+# ==============================================================================
+# SkyRealms Garden Natural Farming Configuration
+# ==============================================================================
+garden:
+  world: "skyrealms_garden"
+  grid:
+    spacing: 512
+    region-size: 256
+  crops:
+    wheat:
+      xp: 10
+      replant-material: WHEAT_SEEDS
+    carrots:
+      xp: 12
+      replant-material: CARROT
+    potatoes:
+      xp: 12
+      replant-material: POTATO
+    beetroots:
+      xp: 15
+      replant-material: BEETROOT_SEEDS
+    melon:
+      xp: 18
+      replant-material: MELON_SEEDS
+    pumpkin:
+      xp: 20
+      replant-material: PUMPKIN_SEEDS
+    sugar_cane:
+      xp: 14
+      replant-material: SUGAR_CANE
+    cactus:
+      xp: 16
+      replant-material: CACTUS
+    cocoa:
+      xp: 15
+      replant-material: COCOA_BEANS
+    nether_wart:
+      xp: 25
+      replant-material: NETHER_WART

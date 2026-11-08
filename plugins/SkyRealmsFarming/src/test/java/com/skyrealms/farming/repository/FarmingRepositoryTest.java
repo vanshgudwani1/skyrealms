@@ -180,4 +180,102 @@ class FarmingRepositoryTest {
         // Generator should be deleted via ON DELETE CASCADE
         assertThat(repository.findGeneratorById(generatorId)).isEmpty();
     }
+
+    @Test
+    @DisplayName("Should save, retrieve, and update SkyRealms Garden")
+    void shouldSaveAndRetrieveGarden() throws SQLException {
+        UUID gardenId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        com.skyrealms.farming.garden.Garden garden = new com.skyrealms.farming.garden.Garden(
+                gardenId,
+                testIslandId,
+                0,
+                "skyrealms_garden",
+                0, 100, 0,
+                256,
+                true,
+                now,
+                now
+        );
+
+        repository.saveGarden(garden);
+
+        Optional<com.skyrealms.farming.garden.Garden> loadedOpt = repository.findGardenByIsland(testIslandId);
+        assertThat(loadedOpt).isPresent();
+        com.skyrealms.farming.garden.Garden loaded = loadedOpt.get();
+
+        assertThat(loaded.gardenId()).isEqualTo(gardenId);
+        assertThat(loaded.regionIndex()).isZero();
+        assertThat(loaded.worldName()).isEqualTo("skyrealms_garden");
+        assertThat(loaded.size()).isEqualTo(256);
+        assertThat(loaded.unlocked()).isTrue();
+
+        // Check next region index
+        int next = repository.findNextGardenRegionIndex();
+        assertThat(next).isEqualTo(1);
+
+        // Load all gardens
+        List<com.skyrealms.farming.garden.Garden> all = repository.loadAllGardens();
+        assertThat(all).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Should save and retrieve 16 plots for an island")
+    void shouldSaveAndRetrievePlots() throws SQLException {
+        for (int i = 1; i <= 16; i++) {
+            com.skyrealms.farming.garden.GardenPlot plot = new com.skyrealms.farming.garden.GardenPlot(
+                    testIslandId,
+                    i,
+                    (i == 1),
+                    (i == 1) ? "WHEAT" : null,
+                    "BALANCED",
+                    1.0,
+                    1.0,
+                    1.0
+            );
+            repository.savePlot(plot);
+        }
+
+        List<com.skyrealms.farming.garden.GardenPlot> plots = repository.findPlotsByIsland(testIslandId);
+        assertThat(plots).hasSize(16);
+        assertThat(plots.get(0).plotIndex()).isEqualTo(1);
+        assertThat(plots.get(0).unlocked()).isTrue();
+        assertThat(plots.get(0).cropType()).isEqualTo("WHEAT");
+        assertThat(plots.get(1).unlocked()).isFalse();
+
+        // Update plot 2 to unlocked with CARROTS
+        com.skyrealms.farming.garden.GardenPlot plot2 = new com.skyrealms.farming.garden.GardenPlot(
+                testIslandId, 2, true, "CARROTS", "NUTRIENT", 1.5, 1.2, 2.0
+        );
+        repository.savePlot(plot2);
+
+        List<com.skyrealms.farming.garden.GardenPlot> reloaded = repository.findPlotsByIsland(testIslandId);
+        assertThat(reloaded.get(1).unlocked()).isTrue();
+        assertThat(reloaded.get(1).cropType()).isEqualTo("CARROTS");
+        assertThat(reloaded.get(1).fertility()).isEqualTo(1.5);
+    }
+
+    @Test
+    @DisplayName("Should cascade delete gardens and plots when island is deleted")
+    void shouldCascadeDeleteGardenOnIslandDelete() throws SQLException {
+        com.skyrealms.farming.garden.Garden garden = new com.skyrealms.farming.garden.Garden(
+                UUID.randomUUID(), testIslandId, 0, "skyrealms_garden", 0, 100, 0, 256, true, Instant.now(), Instant.now()
+        );
+        repository.saveGarden(garden);
+        repository.savePlot(new com.skyrealms.farming.garden.GardenPlot(testIslandId, 1, true, "WHEAT", "BALANCED", 1.0, 1.0, 1.0));
+
+        assertThat(repository.findGardenByIsland(testIslandId)).isPresent();
+        assertThat(repository.findPlotsByIsland(testIslandId)).hasSize(1);
+
+        // Delete island
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement("DELETE FROM sr_islands WHERE island_id = ?")) {
+            ps.setObject(1, testIslandId);
+            ps.executeUpdate();
+        }
+
+        assertThat(repository.findGardenByIsland(testIslandId)).isEmpty();
+        assertThat(repository.findPlotsByIsland(testIslandId)).isEmpty();
+    }
 }

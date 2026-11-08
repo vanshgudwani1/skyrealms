@@ -415,4 +415,223 @@ public final class FarmingRepository {
                 coreX, coreY, coreZ, status, totalHarvests, createdAt, updatedAt, upgrades
         );
     }
+
+    // =========================================================================
+    // SkyRealms Garden Persistence
+    // =========================================================================
+
+    @NotNull
+    public List<com.skyrealms.farming.garden.Garden> loadAllGardens() throws SQLException {
+        String sql = """
+            SELECT garden_id, island_id, region_index, world_name, center_x, center_y, center_z,
+                   size, unlocked, unlocked_at, created_at
+            FROM sr_gardens
+        """;
+        List<com.skyrealms.farming.garden.Garden> gardens = new ArrayList<>();
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                gardens.add(mapGarden(rs));
+            }
+        }
+        return gardens;
+    }
+
+    @NotNull
+    public Optional<com.skyrealms.farming.garden.Garden> findGardenByIsland(@NotNull UUID islandId) throws SQLException {
+        String sql = """
+            SELECT garden_id, island_id, region_index, world_name, center_x, center_y, center_z,
+                   size, unlocked, unlocked_at, created_at
+            FROM sr_gardens
+            WHERE island_id = ?
+        """;
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, islandId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapGarden(rs));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public int findNextGardenRegionIndex() throws SQLException {
+        String sql = "SELECT COALESCE(MAX(region_index), -1) + 1 AS next_index FROM sr_gardens";
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                return rs.getInt("next_index");
+            }
+        }
+        return 0;
+    }
+
+    public void saveGarden(@NotNull com.skyrealms.farming.garden.Garden garden) throws SQLException {
+        String checkSql = "SELECT 1 FROM sr_gardens WHERE garden_id = ?";
+        String insertSql = """
+            INSERT INTO sr_gardens (garden_id, island_id, region_index, world_name,
+                                    center_x, center_y, center_z, size, unlocked,
+                                    unlocked_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """;
+        String updateSql = """
+            UPDATE sr_gardens
+            SET unlocked = ?, unlocked_at = ?, updated_at = ?
+            WHERE garden_id = ?
+        """;
+
+        try (Connection conn = databaseService.getConnection()) {
+            boolean exists = false;
+            try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+                ps.setObject(1, garden.gardenId());
+                try (ResultSet rs = ps.executeQuery()) {
+                    exists = rs.next();
+                }
+            }
+
+            Timestamp now = Timestamp.from(Instant.now());
+            if (!exists) {
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setObject(1, garden.gardenId());
+                    ps.setObject(2, garden.islandId());
+                    ps.setInt(3, garden.regionIndex());
+                    ps.setString(4, garden.worldName());
+                    ps.setInt(5, garden.centerX());
+                    ps.setInt(6, garden.centerY());
+                    ps.setInt(7, garden.centerZ());
+                    ps.setInt(8, garden.size());
+                    ps.setBoolean(9, garden.unlocked());
+                    ps.setTimestamp(10, garden.unlockedAt() != null ? Timestamp.from(garden.unlockedAt()) : now);
+                    ps.setTimestamp(11, Timestamp.from(garden.createdAt()));
+                    ps.setTimestamp(12, now);
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setBoolean(1, garden.unlocked());
+                    ps.setTimestamp(2, garden.unlockedAt() != null ? Timestamp.from(garden.unlockedAt()) : now);
+                    ps.setTimestamp(3, now);
+                    ps.setObject(4, garden.gardenId());
+                    ps.executeUpdate();
+                }
+            }
+        }
+    }
+
+    @NotNull
+    public List<com.skyrealms.farming.garden.GardenPlot> findPlotsByIsland(@NotNull UUID islandId) throws SQLException {
+        String sql = """
+            SELECT island_id, plot_index, unlocked, crop_type, soil_type,
+                   fertility, moisture, nutrient_level
+            FROM sr_garden_plots
+            WHERE island_id = ?
+            ORDER BY plot_index ASC
+        """;
+        List<com.skyrealms.farming.garden.GardenPlot> plots = new ArrayList<>();
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, islandId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    plots.add(mapPlot(rs));
+                }
+            }
+        }
+        return plots;
+    }
+
+    public void savePlot(@NotNull com.skyrealms.farming.garden.GardenPlot plot) throws SQLException {
+        String checkSql = "SELECT 1 FROM sr_garden_plots WHERE island_id = ? AND plot_index = ?";
+        String insertSql = """
+            INSERT INTO sr_garden_plots (island_id, plot_index, unlocked, crop_type, soil_type,
+                                         fertility, moisture, nutrient_level, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """;
+        String updateSql = """
+            UPDATE sr_garden_plots
+            SET unlocked = ?, crop_type = ?, soil_type = ?, fertility = ?, moisture = ?,
+                nutrient_level = ?, updated_at = ?
+            WHERE island_id = ? AND plot_index = ?
+        """;
+
+        try (Connection conn = databaseService.getConnection()) {
+            boolean exists = false;
+            try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+                ps.setObject(1, plot.islandId());
+                ps.setInt(2, plot.plotIndex());
+                try (ResultSet rs = ps.executeQuery()) {
+                    exists = rs.next();
+                }
+            }
+
+            Timestamp now = Timestamp.from(Instant.now());
+            if (!exists) {
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setObject(1, plot.islandId());
+                    ps.setInt(2, plot.plotIndex());
+                    ps.setBoolean(3, plot.unlocked());
+                    ps.setString(4, plot.cropType());
+                    ps.setString(5, plot.soilType());
+                    ps.setDouble(6, plot.fertility());
+                    ps.setDouble(7, plot.moisture());
+                    ps.setDouble(8, plot.nutrientLevel());
+                    ps.setTimestamp(9, now);
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setBoolean(1, plot.unlocked());
+                    ps.setString(2, plot.cropType());
+                    ps.setString(3, plot.soilType());
+                    ps.setDouble(4, plot.fertility());
+                    ps.setDouble(5, plot.moisture());
+                    ps.setDouble(6, plot.nutrientLevel());
+                    ps.setTimestamp(7, now);
+                    ps.setObject(8, plot.islandId());
+                    ps.setInt(9, plot.plotIndex());
+                    ps.executeUpdate();
+                }
+            }
+        }
+    }
+
+    private com.skyrealms.farming.garden.Garden mapGarden(ResultSet rs) throws SQLException {
+        UUID gardenId = (UUID) rs.getObject("garden_id");
+        UUID islandId = (UUID) rs.getObject("island_id");
+        int regionIndex = rs.getInt("region_index");
+        String worldName = rs.getString("world_name");
+        int centerX = rs.getInt("center_x");
+        int centerY = rs.getInt("center_y");
+        int centerZ = rs.getInt("center_z");
+        int size = rs.getInt("size");
+        boolean unlocked = rs.getBoolean("unlocked");
+        Timestamp unlockedTs = rs.getTimestamp("unlocked_at");
+        Instant unlockedAt = unlockedTs != null ? unlockedTs.toInstant() : null;
+        Instant createdAt = rs.getTimestamp("created_at").toInstant();
+
+        return new com.skyrealms.farming.garden.Garden(
+                gardenId, islandId, regionIndex, worldName,
+                centerX, centerY, centerZ, size, unlocked, unlockedAt, createdAt
+        );
+    }
+
+    private com.skyrealms.farming.garden.GardenPlot mapPlot(ResultSet rs) throws SQLException {
+        UUID islandId = (UUID) rs.getObject("island_id");
+        int plotIndex = rs.getInt("plot_index");
+        boolean unlocked = rs.getBoolean("unlocked");
+        String cropType = rs.getString("crop_type");
+        String soilType = rs.getString("soil_type");
+        double fertility = rs.getDouble("fertility");
+        double moisture = rs.getDouble("moisture");
+        double nutrientLevel = rs.getDouble("nutrient_level");
+
+        return new com.skyrealms.farming.garden.GardenPlot(
+                islandId, plotIndex, unlocked, cropType, soilType,
+                fertility, moisture, nutrientLevel
+        );
+    }
 }

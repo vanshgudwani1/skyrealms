@@ -164,12 +164,20 @@ public final class FarmingProgressionService implements AutoCloseable {
     }
 
     /**
-     * Increments crop harvest count in collection.
+     * Increments crop harvest count in collection by Material.
      */
     public void recordCropHarvest(@NotNull Player player, @NotNull Material cropMaterial, long amount) {
-        String cropName = cropMaterial.name();
+        recordCropHarvest(player, cropMaterial.name(), amount);
+    }
+
+    /**
+     * Increments crop harvest count in collection by crop identifier string.
+     */
+    public void recordCropHarvest(@NotNull Player player, @NotNull String cropName, long amount) {
+        cropName = cropName.toUpperCase();
         Map<String, FarmingCropCollection> playerCollections = collectionsCache.computeIfAbsent(player.getUniqueId(), k -> new ConcurrentHashMap<>());
-        FarmingCropCollection col = playerCollections.computeIfAbsent(cropName, k -> new FarmingCropCollection(player.getUniqueId(), cropName, 0L, 1, java.time.Instant.now()));
+        final String finalCropName = cropName;
+        FarmingCropCollection col = playerCollections.computeIfAbsent(cropName, k -> new FarmingCropCollection(player.getUniqueId(), finalCropName, 0L, 1, java.time.Instant.now()));
 
         col.addAmount(amount);
 
@@ -179,15 +187,26 @@ public final class FarmingProgressionService implements AutoCloseable {
         if (newTier > currentTier) {
             col.setTierUnlocked(newTier);
             player.sendMessage(Component.text("⭐ [Collection Milestone] ", NamedTextColor.GOLD, TextDecoration.BOLD)
-                    .append(Component.text(formatName(cropMaterial) + " Collection reached Tier " + newTier + "!", NamedTextColor.YELLOW)));
+                    .append(Component.text(finalCropName + " Collection reached Tier " + newTier + "!", NamedTextColor.YELLOW)));
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 1.0f, 1.5f);
         }
 
+        final String persistentName = cropName;
         executor.execute(() -> {
             try {
-                repository.incrementCollection(player.getUniqueId(), cropName, amount);
+                repository.incrementCollection(player.getUniqueId(), persistentName, amount);
             } catch (SQLException e) {
                 LOGGER.error("Failed to increment collection for {}: {}", player.getUniqueId(), e.getMessage());
+            }
+        });
+    }
+
+    public void incrementCollection(@NotNull UUID playerUuid, @NotNull String cropName, long amount) {
+        executor.execute(() -> {
+            try {
+                repository.incrementCollection(playerUuid, cropName.toUpperCase(), amount);
+            } catch (SQLException e) {
+                LOGGER.error("Failed to increment collection for {}: {}", playerUuid, e.getMessage());
             }
         });
     }

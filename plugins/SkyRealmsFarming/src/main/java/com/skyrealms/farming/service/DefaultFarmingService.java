@@ -23,6 +23,23 @@ public final class DefaultFarmingService implements FarmingService {
     private final FarmingUpgradeService upgradeService;
     private final CropMutationEngine mutationEngine;
     private final IslandService islandService;
+    private com.skyrealms.farming.garden.GardenService gardenService;
+
+    public DefaultFarmingService(
+            @NotNull FarmingGeneratorManager generatorManager,
+            @NotNull FarmingProgressionService progressionService,
+            @NotNull FarmingUpgradeService upgradeService,
+            @NotNull CropMutationEngine mutationEngine,
+            @NotNull IslandService islandService,
+            @org.jetbrains.annotations.Nullable com.skyrealms.farming.garden.GardenService gardenService
+    ) {
+        this.generatorManager = generatorManager;
+        this.progressionService = progressionService;
+        this.upgradeService = upgradeService;
+        this.mutationEngine = mutationEngine;
+        this.islandService = islandService;
+        this.gardenService = gardenService;
+    }
 
     public DefaultFarmingService(
             @NotNull FarmingGeneratorManager generatorManager,
@@ -31,11 +48,11 @@ public final class DefaultFarmingService implements FarmingService {
             @NotNull CropMutationEngine mutationEngine,
             @NotNull IslandService islandService
     ) {
-        this.generatorManager = generatorManager;
-        this.progressionService = progressionService;
-        this.upgradeService = upgradeService;
-        this.mutationEngine = mutationEngine;
-        this.islandService = islandService;
+        this(generatorManager, progressionService, upgradeService, mutationEngine, islandService, null);
+    }
+
+    public void setGardenService(@NotNull com.skyrealms.farming.garden.GardenService gardenService) {
+        this.gardenService = gardenService;
     }
 
     @Override
@@ -154,5 +171,11 @@ public final class DefaultFarmingService implements FarmingService {
     @NotNull
     public CropMutationEngine mutationEngine() {
         return mutationEngine;
+    }
+
+    @Override
+    @NotNull
+    public com.skyrealms.farming.garden.GardenService gardenService() {
+        return Objects.requireNonNull(gardenService, "gardenService has not been initialized");
     }
 }

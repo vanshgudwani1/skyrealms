@@ -2,6 +2,8 @@ package com.skyrealms.farming.module;
 
 import com.skyrealms.economy.service.EconomyService;
 import com.skyrealms.farming.command.FarmCommand;
+import com.skyrealms.farming.command.GardenCommand;
+import com.skyrealms.farming.garden.*;
 import com.skyrealms.farming.gui.FarmingGui;
 import com.skyrealms.farming.listener.FarmingListener;
 import com.skyrealms.farming.mutation.CropMutationEngine;
@@ -23,7 +25,8 @@ import java.util.Objects;
 
 /**
  * SkyRealms Farming Module.
- * Provides physical structure-based farming generators, progression, crop mutations, DecentHolograms, and economy upgrades.
+ * Completely redesigned natural progression Garden Engine with shared skyrealms_garden world,
+ * 256x256 isolated regions, 16 crop plots (2x8) in a glass greenhouse dome, and retired generator mechanics.
  */
 public final class FarmingModule implements SkyModule {
 
@@ -36,7 +39,8 @@ public final class FarmingModule implements SkyModule {
     private FarmingGeneratorManager generatorManager;
     private FarmingProgressionService progressionService;
     private FarmingHologramService hologramService;
-    private FarmingService farmingService;
+    private DefaultGardenService gardenService;
+    private DefaultFarmingService farmingService;
 
     public FarmingModule(@NotNull JavaPlugin plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin cannot be null");
@@ -103,32 +107,57 @@ public final class FarmingModule implements SkyModule {
         this.generatorManager = new FarmingGeneratorManager(plugin, repository, validator, context.eventBus(), islandService);
         generatorManager.setServices(hologramService, terraformService, overclockManager, comboTracker, economyService, progressionService);
 
+        // 2. Initialize SkyRealms Garden Foundation (World, Allocator, Dome Generator)
+        GardenWorldManager worldManager = new GardenWorldManager(plugin);
+        worldManager.getOrCreateGardenWorld();
+        GardenSpatialAllocator allocator = new GardenSpatialAllocator(512, 256);
+        this.gardenService = new DefaultGardenService(plugin, repository, worldManager, allocator, islandService);
+
         FarmingGeneratorProcessor processor = new FarmingGeneratorProcessor(
                 plugin, progressionService, mutationEngine, repository, context.eventBus(),
                 hologramService, overclockManager, comboTracker
         );
 
-        this.farmingService = new DefaultFarmingService(generatorManager, progressionService, upgradeService, mutationEngine, islandService);
+        this.farmingService = new DefaultFarmingService(generatorManager, progressionService, upgradeService, mutationEngine, islandService, gardenService);
 
-        // 2. Register Service in DI Registry and Bukkit ServicesManager
+        // 3. Register Services in DI Registry and Bukkit ServicesManager
         context.services().register(FarmingService.class, farmingService);
+        context.services().register(GardenService.class, gardenService);
         Bukkit.getServicesManager().register(FarmingService.class, farmingService, plugin, ServicePriority.High);
-
-        // 3. Load active generators from database and re-spawn DecentHolograms
-        generatorManager.loadActiveGenerators();
+        Bukkit.getServicesManager().register(GardenService.class, gardenService, plugin, ServicePriority.High);
 
         // 4. Register Event Listeners
+        NaturalFarmingEngine naturalEngine = new NaturalFarmingEngine(plugin, gardenService, progressionService, context.eventBus());
+        NaturalFarmingListener naturalFarmingListener = new NaturalFarmingListener(gardenService, naturalEngine, context.eventBus());
         FarmingListener farmingListener = new FarmingListener(farmingService, processor, islandService);
+        GardenProtectionListener gardenProtectionListener = new GardenProtectionListener(gardenService, islandService);
+
+        Bukkit.getPluginManager().registerEvents(naturalFarmingListener, plugin);
         Bukkit.getPluginManager().registerEvents(farmingListener, plugin);
+        Bukkit.getPluginManager().registerEvents(gardenProtectionListener, plugin);
         Bukkit.getPluginManager().registerEvents(new FarmingGui(farmingService, FarmingGui.GuiType.MAIN_MENU, net.kyori.adventure.text.Component.empty(), null), plugin);
 
-        // 5. Register /farm command via DynamicCommandRegistrar
+        // 5. Register /garden and /farm commands via DynamicCommandRegistrar
+        GardenCommand gardenCommand = new GardenCommand(gardenService, islandService);
+        DynamicCommandRegistrar.register(
+                "skyrealms",
+                "garden",
+                "Primary SkyRealms Greenhouse Garden command",
+                "/garden [home|leave|info|plots|help]",
+                List.of("g"),
+                "skyrealms.garden.base",
+                PermissionDefault.TRUE,
+                "You do not have permission to use /garden.",
+                gardenCommand,
+                gardenCommand
+        );
+
         FarmCommand farmCommand = new FarmCommand(farmingService, islandService);
         DynamicCommandRegistrar.register(
                 "skyrealms",
                 "farm",
-                "Primary SkyRealms farming generator and progression command",
-                "/farm [help|stats|generators|generator|core]",
+                "SkyRealms farming command (redirects to Garden)",
+                "/farm [stats|help]",
                 List.of("farming"),
                 "skyrealms.farming.base",
                 PermissionDefault.TRUE,
@@ -138,7 +167,7 @@ public final class FarmingModule implements SkyModule {
         );
 
         state = ModuleState.ENABLED;
-        context.logger().info("SkyRealms Farming module successfully enabled with DecentHolograms & Auto-Terraforming.");
+        context.logger().info("SkyRealms Farming module enabled with Greenhouse Garden Foundation. Generators safely retired.");
     }
 
     @Override
@@ -151,6 +180,9 @@ public final class FarmingModule implements SkyModule {
         }
 
         Bukkit.getServicesManager().unregister(FarmingService.class, farmingService);
+        if (gardenService != null) {
+            Bukkit.getServicesManager().unregister(GardenService.class, gardenService);
+        }
 
         state = ModuleState.DISABLED;
         context.logger().info("SkyRealms Farming module disabled.");
@@ -158,6 +190,10 @@ public final class FarmingModule implements SkyModule {
 
     public FarmingService farmingService() {
         return farmingService;
+    }
+
+    public GardenService gardenService() {
+        return gardenService;
     }
 
     public FarmingHologramService hologramService() {
