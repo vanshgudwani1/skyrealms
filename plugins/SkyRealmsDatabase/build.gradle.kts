@@ -39,6 +39,7 @@ tasks.shadowJar {
 val deployToServer by tasks.registering(Copy::class) {
     description = "Copies the compiled plugin JAR directly to the server plugins folder"
     group = "deployment"
+    doNotTrackState("Prevents scanning locked server files")
     dependsOn(tasks.shadowJar)
     from(tasks.shadowJar.flatMap { it.archiveFile })
     into(rootProject.file("../plugins"))

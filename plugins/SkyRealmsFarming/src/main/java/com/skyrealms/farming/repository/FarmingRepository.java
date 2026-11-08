@@ -1,0 +1,418 @@
+package com.skyrealms.farming.repository;
+
+import com.skyrealms.farming.model.*;
+import com.skyrealms.platform.database.DatabaseService;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.sql.*;
+import java.time.Instant;
+import java.util.*;
+
+/**
+ * High-performance database repository for SkyRealms Farming.
+ * Manages generators, upgrades, player progress, crop collections, and mutations.
+ */
+public final class FarmingRepository {
+
+    private final DatabaseService databaseService;
+
+    public FarmingRepository(@NotNull DatabaseService databaseService) {
+        this.databaseService = Objects.requireNonNull(databaseService, "databaseService cannot be null");
+    }
+
+    /**
+     * Loads all active farming generators across all worlds on server startup.
+     */
+    @NotNull
+    public List<FarmingGenerator> loadAllActiveGenerators() throws SQLException {
+        String sql = """
+            SELECT generator_id, island_id, owner_uuid, generator_tier, world_name,
+                   core_x, core_y, core_z, status, total_harvests, created_at, updated_at
+            FROM sr_farming_generators
+            WHERE status = 'ACTIVE'
+        """;
+
+        List<FarmingGenerator> generators = new ArrayList<>();
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                generators.add(mapGenerator(conn, rs));
+            }
+        }
+        return generators;
+    }
+
+    /**
+     * Finds a generator by its unique UUID.
+     */
+    @NotNull
+    public Optional<FarmingGenerator> findGeneratorById(@NotNull UUID generatorId) throws SQLException {
+        String sql = """
+            SELECT generator_id, island_id, owner_uuid, generator_tier, world_name,
+                   core_x, core_y, core_z, status, total_harvests, created_at, updated_at
+            FROM sr_farming_generators
+            WHERE generator_id = ?
+        """;
+
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, generatorId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapGenerator(conn, rs));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Loads all generators belonging to a specific island.
+     */
+    @NotNull
+    public List<FarmingGenerator> loadGeneratorsByIsland(@NotNull UUID islandId) throws SQLException {
+        String sql = """
+            SELECT generator_id, island_id, owner_uuid, generator_tier, world_name,
+                   core_x, core_y, core_z, status, total_harvests, created_at, updated_at
+            FROM sr_farming_generators
+            WHERE island_id = ?
+        """;
+
+        List<FarmingGenerator> generators = new ArrayList<>();
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, islandId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    generators.add(mapGenerator(conn, rs));
+                }
+            }
+        }
+        return generators;
+    }
+
+    /**
+     * Saves or updates a generator record.
+     */
+    public void saveGenerator(@NotNull FarmingGenerator generator) throws SQLException {
+        String checkSql = "SELECT 1 FROM sr_farming_generators WHERE generator_id = ?";
+        String insertSql = """
+            INSERT INTO sr_farming_generators (
+                generator_id, island_id, owner_uuid, generator_tier, world_name,
+                core_x, core_y, core_z, status, total_harvests, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """;
+        String updateSql = """
+            UPDATE sr_farming_generators
+            SET generator_tier = ?, status = ?, total_harvests = ?, updated_at = ?
+            WHERE generator_id = ?
+        """;
+
+        try (Connection conn = databaseService.getConnection()) {
+            boolean exists = false;
+            try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+                ps.setObject(1, generator.generatorId());
+                try (ResultSet rs = ps.executeQuery()) {
+                    exists = rs.next();
+                }
+            }
+
+            if (!exists) {
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setObject(1, generator.generatorId());
+                    ps.setObject(2, generator.islandId());
+                    ps.setObject(3, generator.ownerUuid());
+                    ps.setString(4, generator.tier().name());
+                    ps.setString(5, generator.worldName());
+                    ps.setInt(6, generator.coreX());
+                    ps.setInt(7, generator.coreY());
+                    ps.setInt(8, generator.coreZ());
+                    ps.setString(9, generator.status().name());
+                    ps.setLong(10, generator.totalHarvests());
+                    ps.setTimestamp(11, Timestamp.from(generator.createdAt()));
+                    ps.setTimestamp(12, Timestamp.from(generator.updatedAt()));
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setString(1, generator.tier().name());
+                    ps.setString(2, generator.status().name());
+                    ps.setLong(3, generator.totalHarvests());
+                    ps.setTimestamp(4, Timestamp.from(generator.updatedAt()));
+                    ps.setObject(5, generator.generatorId());
+                    ps.executeUpdate();
+                }
+            }
+
+            // Save upgrades
+            for (GeneratorUpgrade upgrade : generator.upgrades().values()) {
+                saveUpgrade(conn, generator.generatorId(), upgrade);
+            }
+        }
+    }
+
+    /**
+     * Deletes a generator by ID.
+     */
+    public void deleteGenerator(@NotNull UUID generatorId) throws SQLException {
+        String sql = "DELETE FROM sr_farming_generators WHERE generator_id = ?";
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, generatorId);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * Saves or updates a generator upgrade.
+     */
+    public void saveUpgrade(@NotNull UUID generatorId, @NotNull GeneratorUpgrade upgrade) throws SQLException {
+        try (Connection conn = databaseService.getConnection()) {
+            saveUpgrade(conn, generatorId, upgrade);
+        }
+    }
+
+    private void saveUpgrade(Connection conn, UUID generatorId, GeneratorUpgrade upgrade) throws SQLException {
+        String checkSql = "SELECT 1 FROM sr_farming_generator_upgrades WHERE generator_id = ? AND upgrade_key = ?";
+        String insertSql = """
+            INSERT INTO sr_farming_generator_upgrades (generator_id, upgrade_key, upgrade_level, updated_at)
+            VALUES (?, ?, ?, ?)
+        """;
+        String updateSql = """
+            UPDATE sr_farming_generator_upgrades
+            SET upgrade_level = ?, updated_at = ?
+            WHERE generator_id = ? AND upgrade_key = ?
+        """;
+
+        boolean exists = false;
+        try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+            ps.setObject(1, generatorId);
+            ps.setString(2, upgrade.key());
+            try (ResultSet rs = ps.executeQuery()) {
+                exists = rs.next();
+            }
+        }
+
+        if (!exists) {
+            try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                ps.setObject(1, generatorId);
+                ps.setString(2, upgrade.key());
+                ps.setInt(3, upgrade.level());
+                ps.setTimestamp(4, Timestamp.from(upgrade.updatedAt()));
+                ps.executeUpdate();
+            }
+        } else {
+            try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                ps.setInt(1, upgrade.level());
+                ps.setTimestamp(2, Timestamp.from(upgrade.updatedAt()));
+                ps.setObject(3, generatorId);
+                ps.setString(4, upgrade.key());
+                ps.executeUpdate();
+            }
+        }
+    }
+
+    /**
+     * Loads player farming progress or creates default.
+     */
+    @NotNull
+    public FarmingPlayerProgress getOrCreatePlayerProgress(@NotNull UUID playerUuid) throws SQLException {
+        String selectSql = "SELECT farming_xp, farming_level, total_harvests, updated_at FROM sr_farming_player_progress WHERE player_uuid = ?";
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(selectSql)) {
+            ps.setObject(1, playerUuid);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    long xp = rs.getLong("farming_xp");
+                    int level = rs.getInt("farming_level");
+                    long harvests = rs.getLong("total_harvests");
+                    Instant updatedAt = rs.getTimestamp("updated_at").toInstant();
+                    return new FarmingPlayerProgress(playerUuid, xp, level, harvests, updatedAt);
+                }
+            }
+        }
+
+        // Create default
+        FarmingPlayerProgress def = FarmingPlayerProgress.createDefault(playerUuid);
+        savePlayerProgress(def);
+        return def;
+    }
+
+    /**
+     * Saves player farming progress.
+     */
+    public void savePlayerProgress(@NotNull FarmingPlayerProgress progress) throws SQLException {
+        String checkSql = "SELECT 1 FROM sr_farming_player_progress WHERE player_uuid = ?";
+        String insertSql = "INSERT INTO sr_farming_player_progress (player_uuid, farming_xp, farming_level, total_harvests, updated_at) VALUES (?, ?, ?, ?, ?)";
+        String updateSql = "UPDATE sr_farming_player_progress SET farming_xp = ?, farming_level = ?, total_harvests = ?, updated_at = ? WHERE player_uuid = ?";
+
+        try (Connection conn = databaseService.getConnection()) {
+            boolean exists = false;
+            try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+                ps.setObject(1, progress.playerUuid());
+                try (ResultSet rs = ps.executeQuery()) {
+                    exists = rs.next();
+                }
+            }
+
+            if (!exists) {
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setObject(1, progress.playerUuid());
+                    ps.setLong(2, progress.farmingXp());
+                    ps.setInt(3, progress.farmingLevel());
+                    ps.setLong(4, progress.totalHarvests());
+                    ps.setTimestamp(5, Timestamp.from(progress.updatedAt()));
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setLong(1, progress.farmingXp());
+                    ps.setInt(2, progress.farmingLevel());
+                    ps.setLong(3, progress.totalHarvests());
+                    ps.setTimestamp(4, Timestamp.from(progress.updatedAt()));
+                    ps.setObject(5, progress.playerUuid());
+                    ps.executeUpdate();
+                }
+            }
+        }
+    }
+
+    /**
+     * Loads all collections for a player.
+     */
+    @NotNull
+    public Map<String, FarmingCropCollection> loadCollections(@NotNull UUID playerUuid) throws SQLException {
+        String sql = "SELECT crop_type, amount_collected, tier_unlocked, updated_at FROM sr_farming_crop_collections WHERE player_uuid = ?";
+        Map<String, FarmingCropCollection> collections = new HashMap<>();
+
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, playerUuid);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String crop = rs.getString("crop_type").toUpperCase();
+                    long amount = rs.getLong("amount_collected");
+                    int tier = rs.getInt("tier_unlocked");
+                    Instant updated = rs.getTimestamp("updated_at").toInstant();
+                    collections.put(crop, new FarmingCropCollection(playerUuid, crop, amount, tier, updated));
+                }
+            }
+        }
+        return collections;
+    }
+
+    /**
+     * Increments crop collection count atomically.
+     */
+    public void incrementCollection(@NotNull UUID playerUuid, @NotNull String cropType, long amount) throws SQLException {
+        String normalizedCrop = cropType.toUpperCase();
+        String checkSql = "SELECT amount_collected, tier_unlocked FROM sr_farming_crop_collections WHERE player_uuid = ? AND crop_type = ?";
+        String insertSql = "INSERT INTO sr_farming_crop_collections (player_uuid, crop_type, amount_collected, tier_unlocked, updated_at) VALUES (?, ?, ?, 1, ?)";
+        String updateSql = "UPDATE sr_farming_crop_collections SET amount_collected = amount_collected + ?, updated_at = ? WHERE player_uuid = ? AND crop_type = ?";
+
+        try (Connection conn = databaseService.getConnection()) {
+            boolean exists = false;
+            try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+                ps.setObject(1, playerUuid);
+                ps.setString(2, normalizedCrop);
+                try (ResultSet rs = ps.executeQuery()) {
+                    exists = rs.next();
+                }
+            }
+
+            if (!exists) {
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setObject(1, playerUuid);
+                    ps.setString(2, normalizedCrop);
+                    ps.setLong(3, amount);
+                    ps.setTimestamp(4, Timestamp.from(Instant.now()));
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setLong(1, amount);
+                    ps.setTimestamp(2, Timestamp.from(Instant.now()));
+                    ps.setObject(3, playerUuid);
+                    ps.setString(4, normalizedCrop);
+                    ps.executeUpdate();
+                }
+            }
+        }
+    }
+
+    /**
+     * Records a mutation discovery.
+     */
+    public void recordMutationDiscovery(@NotNull UUID playerUuid, @NotNull String mutationType, @NotNull String cropType) throws SQLException {
+        String checkSql = "SELECT discovery_id FROM sr_farming_mutation_discoveries WHERE player_uuid = ? AND mutation_type = ? AND crop_type = ?";
+        String insertSql = "INSERT INTO sr_farming_mutation_discoveries (discovery_id, player_uuid, mutation_type, crop_type, discovered_at, count) VALUES (?, ?, ?, ?, ?, 1)";
+        String updateSql = "UPDATE sr_farming_mutation_discoveries SET count = count + 1 WHERE discovery_id = ?";
+
+        try (Connection conn = databaseService.getConnection()) {
+            UUID discoveryId = null;
+            try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+                ps.setObject(1, playerUuid);
+                ps.setString(2, mutationType.toUpperCase());
+                ps.setString(3, cropType.toUpperCase());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        discoveryId = (UUID) rs.getObject("discovery_id");
+                    }
+                }
+            }
+
+            if (discoveryId == null) {
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setObject(1, UUID.randomUUID());
+                    ps.setObject(2, playerUuid);
+                    ps.setString(3, mutationType.toUpperCase());
+                    ps.setString(4, cropType.toUpperCase());
+                    ps.setTimestamp(5, Timestamp.from(Instant.now()));
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setObject(1, discoveryId);
+                    ps.executeUpdate();
+                }
+            }
+        }
+    }
+
+    private FarmingGenerator mapGenerator(Connection conn, ResultSet rs) throws SQLException {
+        UUID generatorId = (UUID) rs.getObject("generator_id");
+        UUID islandId = (UUID) rs.getObject("island_id");
+        UUID ownerUuid = (UUID) rs.getObject("owner_uuid");
+        FarmingGeneratorTier tier = FarmingGeneratorTier.valueOf(rs.getString("generator_tier"));
+        String worldName = rs.getString("world_name");
+        int coreX = rs.getInt("core_x");
+        int coreY = rs.getInt("core_y");
+        int coreZ = rs.getInt("core_z");
+        GeneratorStatus status = GeneratorStatus.valueOf(rs.getString("status"));
+        long totalHarvests = rs.getLong("total_harvests");
+        Instant createdAt = rs.getTimestamp("created_at").toInstant();
+        Instant updatedAt = rs.getTimestamp("updated_at").toInstant();
+
+        // Load upgrades for generator
+        List<GeneratorUpgrade> upgrades = new ArrayList<>();
+        String upSql = "SELECT upgrade_key, upgrade_level, updated_at FROM sr_farming_generator_upgrades WHERE generator_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(upSql)) {
+            ps.setObject(1, generatorId);
+            try (ResultSet upRs = ps.executeQuery()) {
+                while (upRs.next()) {
+                    String key = upRs.getString("upgrade_key");
+                    int lvl = upRs.getInt("upgrade_level");
+                    Instant upDate = upRs.getTimestamp("updated_at").toInstant();
+                    upgrades.add(new GeneratorUpgrade(key, lvl, upDate));
+                }
+            }
+        }
+
+        return new FarmingGenerator(
+                generatorId, islandId, ownerUuid, tier, worldName,
+                coreX, coreY, coreZ, status, totalHarvests, createdAt, updatedAt, upgrades
+        );
+    }
+}

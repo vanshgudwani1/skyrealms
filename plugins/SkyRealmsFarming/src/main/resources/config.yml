@@ -1,0 +1,105 @@
+# ==============================================================================
+# SkyRealms Farming Engine Configuration
+# ==============================================================================
+
+generator:
+  default:
+    enabled: true
+    max-generators-per-island: 5
+    base-regeneration-delay-ticks: 30
+    require-island: true
+    core-material: LODESTONE
+
+  tiers:
+    wheat:
+      enabled: true
+      display-name: "&eBasic Wheat Generator"
+      required-farming-level: 1
+      base-xp: 15
+      production-limit: 1000
+
+    root:
+      enabled: true
+      display-name: "&6Root Crop Generator"
+      required-farming-level: 5
+      base-xp: 25
+      production-limit: 2500
+
+    fruit:
+      enabled: true
+      display-name: "&aFruit & Gourd Generator"
+      required-farming-level: 12
+      base-xp: 45
+      production-limit: 5000
+
+    tropical:
+      enabled: true
+      display-name: "&2Tropical Plant Generator"
+      required-farming-level: 20
+      base-xp: 75
+      production-limit: 10000
+
+    mystic:
+      enabled: true
+      display-name: "&dMystic Arcane Generator"
+      required-farming-level: 30
+      base-xp: 150
+      production-limit: 25000
+
+  upgrades:
+    speed:
+      enabled: true
+      max-level: 10
+      base-cost: 1000
+      cost-multiplier: 1.8
+      ticks-reduction-per-level: 2
+
+    yield:
+      enabled: true
+      max-level: 5
+      base-cost: 2500
+      cost-multiplier: 2.0
+      bonus-drop-chance-per-level: 0.15
+
+    mutation:
+      enabled: true
+      max-level: 5
+      base-cost: 5000
+      cost-multiplier: 2.5
+      bonus-mutation-chance-per-level: 0.005
+
+    xp_boost:
+      enabled: true
+      max-level: 5
+      base-cost: 3000
+      cost-multiplier: 2.0
+      bonus-xp-multiplier-per-level: 0.20
+
+    capacity:
+      enabled: true
+      max-level: 3
+      base-cost: 10000
+      cost-multiplier: 3.0
+      max-nodes-per-level: 4
+
+  mutations:
+    base-chance: 0.015
+    types:
+      golden:
+        enabled: true
+        weight: 40
+        value-multiplier: 3.0
+      giant:
+        enabled: true
+        weight: 30
+        xp-multiplier: 3.0
+      ancient:
+        enabled: true
+        weight: 15
+      fertile:
+        enabled: true
+        weight: 10
+        drop-multiplier: 2.0
+      magical:
+        enabled: true
+        weight: 5

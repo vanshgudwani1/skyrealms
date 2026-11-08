@@ -1,0 +1,29 @@
+name: SkyRealmsFarming
+version: '1.0.0'
+main: com.skyrealms.farming.SkyRealmsFarmingPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Physical structure-based Farming Generator and progression engine for SkyRealms.
+prefix: SkyRealms-Farming
+dependencies:
+  server:
+    SkyRealmsCore:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsDatabase:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsPlayer:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsEconomy:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsIslands:
+      load: BEFORE
+      required: true
+      join-classpath: true
