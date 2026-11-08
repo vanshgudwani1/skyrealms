@@ -84,7 +84,7 @@ public final class OverclockManager {
                 long secs = remaining % 60;
                 String timeStr = String.format("%02d:%02d", mins, secs);
 
-                hologramService.updateStatus(generator, "<#rainbow>⚡ OVERCLOCKED (+100% Speed) " + timeStr + " ⚡</#rainbow>");
+                hologramService.updateStatus(generator, "<RAINBOW:1>&l⚡ OVERCLOCKED (+100% Speed) " + timeStr + " ⚡</RAINBOW>");
             }
         }.runTaskTimer(plugin, 0L, 20L);
 

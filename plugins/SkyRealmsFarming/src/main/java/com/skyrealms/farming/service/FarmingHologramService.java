@@ -63,9 +63,16 @@ public final class FarmingHologramService {
                 List<String> lines = buildDecentHologramLines(generator, ownerName, statusLine);
                 Hologram holo = DHAPI.getHologram(holoName);
                 if (holo == null) {
-                    DHAPI.createHologram(holoName, holoLoc, lines);
+                    holo = DHAPI.createHologram(holoName, holoLoc, false, lines);
+                    if (holo != null) {
+                        holo.setDownOrigin(true);
+                        holo.realignLines();
+                    }
                 } else {
+                    holo.setDownOrigin(true);
+                    DHAPI.moveHologram(holo, holoLoc);
                     DHAPI.setHologramLines(holo, lines);
+                    holo.realignLines();
                 }
                 return;
             } catch (Throwable t) {
@@ -74,7 +81,7 @@ public final class FarmingHologramService {
         }
 
         // Native TextDisplay Fallback
-        spawnNativeFallback(generator, holoLoc, ownerName, statusLine);
+        spawnNativeFallback(generator, getNativeFallbackLocation(generator), ownerName, statusLine);
     }
 
     /**
@@ -118,9 +125,17 @@ public final class FarmingHologramService {
             case TIER_5_MYSTIC -> "#ICON: NETHER_WART";
         };
 
+        String gradientTitle = switch (tier) {
+            case TIER_1_WHEAT -> "<#FFD700>&l✦ WHEAT GENERATOR ✦</#FFA500>";
+            case TIER_2_ROOT -> "<#FF7F50>&l✦ ROOT CROP GENERATOR ✦</#FF4500>";
+            case TIER_3_FRUIT -> "<#32CD32>&l✦ FRUIT & GOURD GENERATOR ✦</#00FF7F>";
+            case TIER_4_TROPICAL -> "<#00CED1>&l✦ TROPICAL GENERATOR ✦</#1E90FF>";
+            case TIER_5_MYSTIC -> "<#DA70D6>&l✦ MYSTIC ARCANE GENERATOR ✦</#8A2BE2>";
+        };
+
         return List.of(
                 icon,
-                "<#gradient:#FFD700:#FFA500>✦ " + tier.displayName().toUpperCase() + " ✦</#gradient>",
+                gradientTitle,
                 "&fOwner: &e" + ownerName + " &8• &a" + generator.cropNodes().size() + " Nodes",
                 statusLine,
                 "&7Speed: &eLvl " + speed + " ⚡ &8| &7Yield: &aLvl " + yield + " 🌿 &8| &7Mut: &dLvl " + mutation,
@@ -171,6 +186,12 @@ public final class FarmingHologramService {
 
     private Location getHoloLocation(FarmingGenerator generator) {
         var world = Bukkit.getWorld(generator.worldName());
-        return new Location(world, generator.coreX() + 0.5, generator.coreY() + 2.2, generator.coreZ() + 0.5);
+        // Anchor at bottom of hologram, 0.35 blocks of air above the Lodestone core top (coreY + 1.0)
+        return new Location(world, generator.coreX() + 0.5, generator.coreY() + 1.35, generator.coreZ() + 0.5);
+    }
+
+    private Location getNativeFallbackLocation(FarmingGenerator generator) {
+        var world = Bukkit.getWorld(generator.worldName());
+        return new Location(world, generator.coreX() + 0.5, generator.coreY() + 2.5, generator.coreZ() + 0.5);
     }
 }

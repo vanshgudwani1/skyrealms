@@ -192,6 +192,20 @@ public final class FarmingGeneratorProcessor {
                     return;
                 }
 
+                // 1. Defensive Soil Check: Auto-repair farmland and strictly prevent floating crops
+                Block soilBlock = block.getWorld().getBlockAt(node.x(), node.y() - 1, node.z());
+                if (soilBlock.getType().isAir()) {
+                    soilBlock.setType(Material.FARMLAND, false);
+                } else if (soilBlock.getType() == Material.DIRT || soilBlock.getType() == Material.GRASS_BLOCK
+                        || soilBlock.getType() == Material.COARSE_DIRT || soilBlock.getType() == Material.ROOTED_DIRT) {
+                    soilBlock.setType(Material.FARMLAND, false);
+                }
+
+                if (soilBlock.getType().isAir()) {
+                    LOGGER.warn("Crop node at ({}, {}, {}) is missing soil! Aborting crop placement.", node.x(), node.y(), node.z());
+                    return;
+                }
+
                 FarmingGeneratorTier tier = generator.tier();
                 Material targetMaterial = tier.primaryDropMaterial() == Material.WHEAT_SEEDS ? Material.WHEAT :
                         (tier == FarmingGeneratorTier.TIER_1_WHEAT ? Material.WHEAT :

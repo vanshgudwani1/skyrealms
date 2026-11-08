@@ -19,6 +19,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.entity.EntityInteractEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -109,7 +110,25 @@ public final class FarmingListener implements Listener {
             return;
         }
 
-        // 2. Check if broken block is a Farming Core (Dismantle & Refund)
+        // 2. Check if broken block is Farmland / Soil beneath an active Generator Crop Node
+        Optional<FarmingGeneratorManager.NodeEntry> optNodeAbove = generatorManager.findNodeAt(block.getLocation().clone().add(0, 1, 0));
+        if (optNodeAbove.isPresent()) {
+            event.setCancelled(true);
+            player.sendMessage(Component.text("⛔ You cannot break the farmland of an active Farming Generator! Dismantle the Core with sneak-break or via the /farm menu to remove it.", NamedTextColor.RED));
+            player.playSound(block.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
+            return;
+        }
+
+        // 3. Check if broken block is the sub-surface irrigation block beneath the Core
+        Optional<FarmingGenerator> optCoreAbove = generatorManager.getGeneratorAtCore(block.getLocation().clone().add(0, 1, 0));
+        if (optCoreAbove.isPresent()) {
+            event.setCancelled(true);
+            player.sendMessage(Component.text("⛔ You cannot break the irrigation water beneath an active Farming Generator!", NamedTextColor.RED));
+            player.playSound(block.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
+            return;
+        }
+
+        // 4. Check if broken block is a Farming Core (Dismantle & Refund)
         Optional<FarmingGenerator> optCore = generatorManager.getGeneratorAtCore(block.getLocation());
         if (optCore.isPresent()) {
             FarmingGenerator gen = optCore.get();
@@ -178,6 +197,46 @@ public final class FarmingListener implements Listener {
 
             // Otherwise open GUI
             FarmingGui.openGeneratorDetails(player, gen, farmingService);
+            return;
+        }
+
+        // 3. Prevent shovel dirt path creation on generator farmland
+        if (clicked.getType() == Material.FARMLAND && player.getInventory().getItemInMainHand().getType().name().endsWith("_SHOVEL")) {
+            if (generatorManager.findNodeAt(clicked.getLocation().clone().add(0, 1, 0)).isPresent()) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onFarmlandTrample(PlayerInteractEvent event) {
+        if (event.getAction() == Action.PHYSICAL) {
+            Block b = event.getClickedBlock();
+            if (b != null && b.getType() == Material.FARMLAND) {
+                if (generatorManager.findNodeAt(b.getLocation().clone().add(0, 1, 0)).isPresent()) {
+                    event.setCancelled(true);
+                }
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onEntityTrample(EntityInteractEvent event) {
+        Block b = event.getBlock();
+        if (b.getType() == Material.FARMLAND) {
+            if (generatorManager.findNodeAt(b.getLocation().clone().add(0, 1, 0)).isPresent()) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onFarmlandFade(BlockFadeEvent event) {
+        Block b = event.getBlock();
+        if (b.getType() == Material.FARMLAND) {
+            if (generatorManager.findNodeAt(b.getLocation().clone().add(0, 1, 0)).isPresent()) {
+                event.setCancelled(true);
+            }
         }
     }
 
