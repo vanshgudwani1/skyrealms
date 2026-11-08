@@ -144,10 +144,15 @@ public final class GardenProtectionListener implements Listener {
             }
             // If unlocked: allow harvesting crops!
         } else {
-            // Outside of plots: protect conservatory glass, paths, arches, and sanctuary structure
+            // Outside of plots: protect Sakura conservatory glass, paths, Torii arches, and shrine structure
             Material mat = block.getType();
             if (mat == Material.GLASS || mat == Material.TINTED_GLASS || mat == Material.WHITE_STAINED_GLASS
-                    || mat == Material.LIGHT_GRAY_STAINED_GLASS || mat == Material.LIGHT_BLUE_STAINED_GLASS || mat == Material.DARK_OAK_WOOD
+                    || mat == Material.LIGHT_GRAY_STAINED_GLASS || mat == Material.PINK_STAINED_GLASS
+                    || mat == Material.CHERRY_LEAVES || mat == Material.CHERRY_LOG || mat == Material.CHERRY_WOOD
+                    || mat == Material.CHERRY_PLANKS || mat == Material.CHERRY_SLAB || mat == Material.CHERRY_STAIRS || mat == Material.CHERRY_FENCE
+                    || mat == Material.SPRUCE_LOG || mat == Material.SPRUCE_PLANKS || mat == Material.SPRUCE_SLAB || mat == Material.SPRUCE_STAIRS
+                    || mat == Material.DARK_OAK_LOG || mat == Material.DARK_OAK_PLANKS || mat == Material.DARK_OAK_SLAB || mat == Material.DARK_OAK_STAIRS || mat == Material.DARK_OAK_WOOD
+                    || mat == Material.MOSS_BLOCK || mat == Material.BAMBOO || mat == Material.FLOWERING_AZALEA || mat == Material.PINK_WOOL
                     || mat == Material.STONE_BRICKS || mat == Material.STONE_BRICK_SLAB || mat == Material.STONE_BRICK_STAIRS
                     || mat == Material.SMOOTH_STONE || mat == Material.SMOOTH_STONE_SLAB || mat == Material.POLISHED_ANDESITE
                     || mat == Material.POLISHED_ANDESITE_SLAB || mat == Material.POLISHED_DEEPSLATE
@@ -157,7 +162,7 @@ public final class GardenProtectionListener implements Listener {
                     || mat == Material.LECTERN || mat == Material.SEA_LANTERN || mat == Material.LANTERN
                     || mat == Material.PRISMARINE || mat == Material.DARK_PRISMARINE) {
                 event.setCancelled(true);
-                player.sendMessage(Component.text("⛔ You cannot dismantle Greenhouse Dome structural architecture.", NamedTextColor.RED));
+                player.sendMessage(Component.text("⛔ You cannot dismantle Sakura Glass Garden botanical architecture.", NamedTextColor.RED));
             }
         }
     }

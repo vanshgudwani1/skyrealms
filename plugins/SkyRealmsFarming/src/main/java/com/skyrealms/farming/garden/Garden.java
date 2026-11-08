@@ -132,20 +132,20 @@ public final class Garden {
     }
 
     /**
-     * Entrance arrival spawn point at the West Grand Pavilion (facing East down the grand boulevard).
+     * Entrance arrival spawn point at the West Grand Torii Gate (facing East down the Sakura promenade).
      */
     @NotNull
     public Location getSpawnLocation() {
         World world = Bukkit.getWorld(worldName);
-        return new Location(world, centerX - 288.5, centerY + 1.0, centerZ + 0.5, -90.0f, 0.0f);
+        return new Location(world, centerX - 248.5, centerY + 1.0, centerZ + 0.5, -90.0f, 0.0f);
     }
 
     /**
-     * Elarion the Garden Keeper's dais location at the East Botanical Sanctuary.
+     * Elarion the Garden Keeper's location at the East Sacred Sakura Shrine.
      */
     @NotNull
     public Location getKeeperLocation() {
         World world = Bukkit.getWorld(worldName);
-        return new Location(world, centerX + 288.5, centerY + 1.0, centerZ + 0.5, 90.0f, 0.0f);
+        return new Location(world, centerX + 248.5, centerY + 1.0, centerZ + 0.5, 90.0f, 0.0f);
     }
 }
