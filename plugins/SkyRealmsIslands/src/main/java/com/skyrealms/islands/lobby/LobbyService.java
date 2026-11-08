@@ -20,6 +20,8 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Particle;
+import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.type.PinkPetals;
@@ -28,6 +30,8 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,15 +49,23 @@ public final class LobbyService {
     private final Plugin plugin;
     private final File markerFile;
     private final HologramService hologramService;
+    private final TeleportWarmupService teleportWarmupService;
+
+    private BukkitTask coreParticleTask;
 
     public LobbyService(Plugin plugin) {
         this.plugin = plugin;
         this.markerFile = new File(plugin.getDataFolder(), "lobby_initialized.flag");
         this.hologramService = new HologramService(plugin);
+        this.teleportWarmupService = new TeleportWarmupService(plugin);
     }
 
     public HologramService getHologramService() {
         return hologramService;
+    }
+
+    public TeleportWarmupService getTeleportWarmupService() {
+        return teleportWarmupService;
     }
 
     public boolean isLobbyInitialized() {
@@ -76,10 +88,11 @@ public final class LobbyService {
      */
     public CompletableFuture<Boolean> initLobby(boolean force) {
         if (!force && isLobbyInitialized()) {
-            LOGGER.info("Lobby is already initialized according to marker flag. Refreshing holograms...");
+            LOGGER.info("Lobby is already initialized according to marker flag. Refreshing ambient engine & holograms...");
             World world = Bukkit.getWorld("world");
             if (world != null) {
                 hologramService.spawnAllHolograms(world);
+                startCoreParticleEngine(world);
             }
             return CompletableFuture.completedFuture(true);
         }
@@ -152,12 +165,13 @@ public final class LobbyService {
                     }
                 }
 
-                // Schedule main thread interior decorations, castle aspects & hologram setup
+                // Schedule main thread interior decorations, castle aspects, particle engine & hologram setup
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     try {
                         buildServerInterior(world);
                         buildCastleAspects(world);
                         hologramService.spawnAllHolograms(world);
+                        startCoreParticleEngine(world);
 
                         world.setSpawnLocation(new Location(world, 0.5, 71.0, 0.5, 0.0f, 0.0f));
 
@@ -186,38 +200,64 @@ public final class LobbyService {
     }
 
     /**
-     * Builds the handcrafted Celestial Dais and feature stations at the lobby center.
+     * Builds the stunning Multi-Tiered Celestial Core with sunken glowing glass floor and floating star crystal.
      */
     public void buildServerInterior(World world) {
-        LOGGER.info("Constructing handcrafted Celestial Dais & server interior...");
+        LOGGER.info("Constructing handcrafted Multi-Tiered Celestial Core & server interior...");
 
         int centerY = 70;
-        int radius = 8;
-        for (int x = -radius; x <= radius; x++) {
-            for (int z = -radius; z <= radius; z++) {
-                double dist = Math.sqrt(x * x + z * z);
-                if (dist <= radius) {
-                    Block block = world.getBlockAt(x, centerY, z);
-                    Block above = world.getBlockAt(x, centerY + 1, z);
 
-                    if (dist < 2.0) {
-                        block.setType(Material.CHERRY_PLANKS);
-                    } else if (dist >= 3.8 && dist <= 4.6) {
-                        block.setType(Material.SEA_LANTERN);
-                    } else if (dist > 6.8) {
-                        block.setType(Material.POLISHED_DEEPSLATE);
+        // 1. Outer Ring (Radius 7.5 to 9.2): Polished Deepslate with embedded Amethyst chime blocks
+        for (int x = -9; x <= 9; x++) {
+            for (int z = -9; z <= 9; z++) {
+                double dist = Math.sqrt(x * x + z * z);
+                if (dist > 7.2 && dist <= 9.2) {
+                    Block block = world.getBlockAt(x, centerY, z);
+                    block.setType((x * 3 + z * 5) % 3 == 0 ? Material.AMETHYST_BLOCK : Material.POLISHED_DEEPSLATE);
+                    for (int y = centerY + 1; y <= centerY + 6; y++) {
+                        world.getBlockAt(x, y, z).setType(Material.AIR);
+                    }
+                }
+            }
+        }
+
+        // 2. Sunken Glowing Glass Trench (Radius 4.8 to 7.2, Y=69): Sea Lantern base with Pink/Magenta Stained Glass
+        for (int x = -7; x <= 7; x++) {
+            for (int z = -7; z <= 7; z++) {
+                double dist = Math.sqrt(x * x + z * z);
+                if (dist > 4.6 && dist <= 7.2) {
+                    world.getBlockAt(x, centerY - 2, z).setType(Material.SEA_LANTERN);
+                    world.getBlockAt(x, centerY - 1, z).setType((x + z) % 2 == 0 ? Material.PINK_STAINED_GLASS : Material.MAGENTA_STAINED_GLASS);
+                    for (int y = centerY; y <= centerY + 6; y++) {
+                        world.getBlockAt(x, y, z).setType(Material.AIR);
+                    }
+                }
+            }
+        }
+
+        // 3. Inner Island Dais (Radius 0 to 4.6, Y=70)
+        for (int x = -5; x <= 5; x++) {
+            for (int z = -5; z <= 5; z++) {
+                double dist = Math.sqrt(x * x + z * z);
+                if (dist <= 4.6) {
+                    Block block = world.getBlockAt(x, centerY, z);
+                    if (dist < 1.8) {
+                        block.setType(Material.GILDED_BLACKSTONE);
+                    } else if (dist >= 3.2 && dist <= 4.2) {
+                        block.setType(Material.DEEPSLATE_BRICKS);
                     } else {
-                        block.setType((x + z) % 2 == 0 ? Material.CHERRY_PLANKS : Material.POLISHED_DEEPSLATE);
+                        block.setType(Material.CHERRY_PLANKS);
                     }
 
                     for (int y = centerY + 1; y <= centerY + 6; y++) {
                         world.getBlockAt(x, y, z).setType(Material.AIR);
                     }
 
-                    if (dist > 2.0 && dist < 7.0 && (x * 31 + z * 17) % 5 == 0) {
+                    if (dist > 1.8 && dist <= 4.4 && (x * 17 + z * 31) % 3 == 0) {
+                        Block above = world.getBlockAt(x, centerY + 1, z);
                         above.setType(Material.PINK_PETALS);
                         if (above.getBlockData() instanceof PinkPetals petals) {
-                            petals.setFlowerAmount(3);
+                            petals.setFlowerAmount(4);
                             above.setBlockData(petals);
                         }
                     }
@@ -225,42 +265,104 @@ public final class LobbyService {
             }
         }
 
-        // Center Dais Core: Lodestone pedestal with pink glass crown
+        // 4. Central Celestial Core Levitating Crystal (Anchored at Y=70, Floating at Y=73)
         world.getBlockAt(0, centerY, 0).setType(Material.LODESTONE);
-        world.getBlockAt(0, centerY + 1, 0).setType(Material.PINK_STAINED_GLASS);
+        world.getBlockAt(0, centerY + 1, 0).setType(Material.CRYING_OBSIDIAN);
 
-        // Cherry Torii Pergola over central dais
+        int crystalY = centerY + 3; // Y = 73
+        world.getBlockAt(0, crystalY, 0).setType(Material.BEACON);
+        world.getBlockAt(0, crystalY + 1, 0).setType(Material.PINK_STAINED_GLASS);
+        world.getBlockAt(0, crystalY - 1, 0).setType(Material.MAGENTA_STAINED_GLASS);
+        world.getBlockAt(1, crystalY, 0).setType(Material.PINK_STAINED_GLASS);
+        world.getBlockAt(-1, crystalY, 0).setType(Material.PINK_STAINED_GLASS);
+        world.getBlockAt(0, crystalY, 1).setType(Material.MAGENTA_STAINED_GLASS);
+        world.getBlockAt(0, crystalY, -1).setType(Material.MAGENTA_STAINED_GLASS);
+
+        // Radiant End Rod spikes radiating like an ethereal star
+        world.getBlockAt(2, crystalY, 0).setType(Material.END_ROD);
+        world.getBlockAt(-2, crystalY, 0).setType(Material.END_ROD);
+        world.getBlockAt(0, crystalY, 2).setType(Material.END_ROD);
+        world.getBlockAt(0, crystalY, -2).setType(Material.END_ROD);
+        world.getBlockAt(0, crystalY + 2, 0).setType(Material.END_ROD);
+
+        // 5. Grand Torii Shinto Pergola Pillars around the dais
         int[][] pillarCoords = {{-5, -5}, {5, -5}, {-5, 5}, {5, 5}};
         for (int[] p : pillarCoords) {
             int px = p[0];
             int pz = p[1];
-            for (int y = 1; y <= 5; y++) {
+            for (int y = 1; y <= 6; y++) {
                 world.getBlockAt(px, centerY + y, pz).setType(Material.STRIPPED_CHERRY_LOG);
             }
-            world.getBlockAt(px, centerY + 4, pz + (pz > 0 ? -1 : 1)).setType(Material.CHAIN);
-            world.getBlockAt(px, centerY + 3, pz + (pz > 0 ? -1 : 1)).setType(Material.SOUL_LANTERN);
+            world.getBlockAt(px, centerY + 5, pz + (pz > 0 ? -1 : 1)).setType(Material.CHAIN);
+            world.getBlockAt(px, centerY + 4, pz + (pz > 0 ? -1 : 1)).setType(Material.SOUL_LANTERN);
+            world.getBlockAt(px, centerY + 7, pz).setType(Material.CHERRY_LEAVES);
         }
 
-        for (int x = -5; x <= 5; x++) {
-            world.getBlockAt(x, centerY + 6, -5).setType(Material.CHERRY_SLAB);
-            world.getBlockAt(x, centerY + 6, 5).setType(Material.CHERRY_SLAB);
+        for (int x = -6; x <= 6; x++) {
+            world.getBlockAt(x, centerY + 7, -5).setType(Material.CHERRY_SLAB);
+            world.getBlockAt(x, centerY + 7, 5).setType(Material.CHERRY_SLAB);
         }
-        for (int z = -5; z <= 5; z++) {
-            world.getBlockAt(-5, centerY + 6, z).setType(Material.CHERRY_SLAB);
-            world.getBlockAt(5, centerY + 6, z).setType(Material.CHERRY_SLAB);
+        for (int z = -6; z <= 6; z++) {
+            world.getBlockAt(-5, centerY + 7, z).setType(Material.CHERRY_SLAB);
+            world.getBlockAt(5, centerY + 7, z).setType(Material.CHERRY_SLAB);
         }
 
-        // Station 1: Island Portal (East: X = 13, Z = 0)
+        // Feature Stations
         buildPortalStation(world, 13, centerY, 0);
-
-        // Station 2: Server Info (North: X = 0, Z = -13)
         buildInfoStation(world, 0, centerY, -13);
-
-        // Station 3: Leaderboard Podiums (West: X = -13, Z = 0)
         buildLeaderboardStation(world, -13, centerY, 0);
-
-        // Station 4: Rewards Shrine (South: X = 0, Z = 13)
         buildRewardsStation(world, 0, centerY, 13);
+    }
+
+    /**
+     * Ambient live particle engine revolving around the floating core crystal.
+     */
+    public void startCoreParticleEngine(World world) {
+        if (coreParticleTask != null && !coreParticleTask.isCancelled()) {
+            coreParticleTask.cancel();
+        }
+
+        final Location coreLoc = new Location(world, 0.5, 73.5, 0.5);
+
+        coreParticleTask = new BukkitRunnable() {
+            double angle = 0.0;
+            int tickCounter = 0;
+
+            @Override
+            public void run() {
+                if (world.getPlayers().isEmpty()) {
+                    return;
+                }
+
+                // Orbital ring 1: Cherry leaves revolving horizontally (Radius 1.8)
+                double x1 = Math.cos(angle) * 1.8;
+                double z1 = Math.sin(angle) * 1.8;
+                world.spawnParticle(Particle.CHERRY_LEAVES, coreLoc.getX() + x1, coreLoc.getY(), coreLoc.getZ() + z1, 1, 0, 0, 0, 0);
+
+                // Orbital ring 2: End rod revolving diagonally
+                double x2 = Math.cos(angle + Math.PI) * 1.8;
+                double z2 = Math.sin(angle + Math.PI) * 1.8;
+                double y2 = Math.sin(angle * 2.0) * 0.6;
+                world.spawnParticle(Particle.END_ROD, coreLoc.getX() + x2, coreLoc.getY() + y2, coreLoc.getZ() + z2, 1, 0, 0, 0, 0.01);
+
+                // Gentle purple stardust at center
+                if (tickCounter % 3 == 0) {
+                    world.spawnParticle(Particle.DRAGON_BREATH, coreLoc.getX(), coreLoc.getY() + 0.2, coreLoc.getZ(), 1, 0.08, 0.08, 0.08, 0.01);
+                }
+
+                // Periodic gentle chime & particle ripple (every 5 seconds / 33 ticks)
+                if (tickCounter % 33 == 0) {
+                    world.playSound(coreLoc, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.3f);
+                    world.spawnParticle(Particle.CHERRY_LEAVES, coreLoc, 15, 1.2, 0.2, 1.2, 0.05);
+                }
+
+                angle += 0.18;
+                if (angle > Math.PI * 2) {
+                    angle = 0.0;
+                }
+                tickCounter++;
+            }
+        }.runTaskTimer(plugin, 20L, 3L);
     }
 
     /**
@@ -301,7 +403,7 @@ public final class LobbyService {
             }
         }
 
-        // 2. Castle Gatehouse Courtyard (0, 78, 30)
+        // Castle Gatehouse Courtyard (0, 78, 30)
         for (int x = -4; x <= 4; x++) {
             for (int z = 29; z <= 33; z++) {
                 world.getBlockAt(x, 78, z).setType(Material.POLISHED_DEEPSLATE);
@@ -310,16 +412,16 @@ public final class LobbyService {
         world.getBlockAt(-4, 79, 31).setType(Material.CHERRY_LOG);
         world.getBlockAt(4, 79, 31).setType(Material.CHERRY_LOG);
 
-        // 3. Castle West Wing: Royal Treasury & Bank (-20, 78, 35)
+        // Castle West Wing: Royal Treasury & Bank (-20, 78, 35)
         buildBankAspect(world, -20, 78, 35);
 
-        // 4. Castle East Wing: Arcane Upgrades Spire (+20, 78, 35)
+        // Castle East Wing: Arcane Upgrades Spire (+20, 78, 35)
         buildArcaneSpireAspect(world, 20, 78, 35);
 
-        // 5. Castle High Keep: Grand Citadel Throne & Hall of Fame (0, 82, 55)
+        // Castle High Keep: Grand Citadel Throne & Hall of Fame (0, 82, 55)
         buildCitadelThroneAspect(world, 0, 82, 55);
 
-        // 6. Castle Armory & Forge (-45, 68, -25)
+        // Castle Armory & Forge (-45, 68, -25)
         buildArmoryAspect(world, -45, 68, -25);
     }
 

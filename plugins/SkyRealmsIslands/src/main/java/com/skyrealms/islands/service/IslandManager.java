@@ -4,6 +4,7 @@ import com.skyrealms.economy.model.TransactionResult;
 import com.skyrealms.economy.service.EconomyService;
 import com.skyrealms.islands.event.*;
 import com.skyrealms.islands.fx.IslandEffectsService;
+import com.skyrealms.islands.lobby.TeleportWarmupService;
 import com.skyrealms.islands.model.*;
 import com.skyrealms.islands.repository.IslandRepository;
 import com.skyrealms.islands.world.SpatialGridAllocator;
@@ -46,6 +47,7 @@ public final class IslandManager implements IslandService, AutoCloseable {
 
     private final IslandEffectsService effectsService;
     private final ExecutorService executor;
+    private TeleportWarmupService teleportWarmupService;
 
     // Cache: Spatial grid key -> Island
     private final Map<Long, Island> spatialIndex = new ConcurrentHashMap<>();
@@ -554,6 +556,15 @@ public final class IslandManager implements IslandService, AutoCloseable {
         );
     }
 
+    public void setTeleportWarmupService(@Nullable TeleportWarmupService teleportWarmupService) {
+        this.teleportWarmupService = teleportWarmupService;
+    }
+
+    @Nullable
+    public TeleportWarmupService teleportWarmupService() {
+        return teleportWarmupService;
+    }
+
     @Override
     public void teleportHome(@NotNull Player player) {
         Optional<Island> opt = getIslandByPlayer(player.getUniqueId());
@@ -563,12 +574,19 @@ public final class IslandManager implements IslandService, AutoCloseable {
         }
 
         Location spawn = getIslandSpawnLocation(opt.get());
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            player.teleportAsync(spawn).thenRun(() -> {
+        if (teleportWarmupService != null) {
+            teleportWarmupService.teleportWithWarmup(player, spawn, "Island Home", () -> {
                 effectsService.playTeleportHelix(player);
+                player.sendMessage(Component.text("🌸 Welcome home to your Cherry Sanctuary.", NamedTextColor.LIGHT_PURPLE));
             });
-            player.sendMessage(Component.text("🌸 Welcome home to your Cherry Sanctuary.", NamedTextColor.LIGHT_PURPLE));
-        });
+        } else {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                player.teleportAsync(spawn).thenRun(() -> {
+                    effectsService.playTeleportHelix(player);
+                });
+                player.sendMessage(Component.text("🌸 Welcome home to your Cherry Sanctuary.", NamedTextColor.LIGHT_PURPLE));
+            });
+        }
     }
 
     @Override
@@ -585,23 +603,40 @@ public final class IslandManager implements IslandService, AutoCloseable {
         }
 
         Location spawn = getIslandSpawnLocation(target);
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            visitor.teleportAsync(spawn).thenRun(() -> {
+        String targetName = target.name() != null ? target.name() : "Island";
+        if (teleportWarmupService != null) {
+            teleportWarmupService.teleportWithWarmup(visitor, spawn, targetName, () -> {
                 effectsService.playTeleportHelix(visitor);
-            });
-            visitor.sendMessage(Component.text("🌸 Visiting " + (target.name() != null ? target.name() : "Island") + "...", NamedTextColor.LIGHT_PURPLE));
+                visitor.sendMessage(Component.text("🌸 Visiting " + targetName + "...", NamedTextColor.LIGHT_PURPLE));
 
-            // Record visit asynchronously
-            IslandVisit visit = new IslandVisit(UUID.randomUUID(), targetIslandId, visitor.getUniqueId(), Instant.now(), 0L);
-            executor.execute(() -> {
-                try {
-                    repository.recordVisit(visit);
-                    eventBus.publishAsync(new IslandVisitedEvent(targetIslandId, visitor.getUniqueId()));
-                } catch (SQLException e) {
-                    LOGGER.warn("Failed to record visit: {}", e.getMessage());
-                }
+                IslandVisit visit = new IslandVisit(UUID.randomUUID(), targetIslandId, visitor.getUniqueId(), Instant.now(), 0L);
+                executor.execute(() -> {
+                    try {
+                        repository.recordVisit(visit);
+                        eventBus.publishAsync(new IslandVisitedEvent(targetIslandId, visitor.getUniqueId()));
+                    } catch (SQLException e) {
+                        LOGGER.warn("Failed to record visit: {}", e.getMessage());
+                    }
+                });
             });
-        });
+        } else {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                visitor.teleportAsync(spawn).thenRun(() -> {
+                    effectsService.playTeleportHelix(visitor);
+                });
+                visitor.sendMessage(Component.text("🌸 Visiting " + targetName + "...", NamedTextColor.LIGHT_PURPLE));
+
+                IslandVisit visit = new IslandVisit(UUID.randomUUID(), targetIslandId, visitor.getUniqueId(), Instant.now(), 0L);
+                executor.execute(() -> {
+                    try {
+                        repository.recordVisit(visit);
+                        eventBus.publishAsync(new IslandVisitedEvent(targetIslandId, visitor.getUniqueId()));
+                    } catch (SQLException e) {
+                        LOGGER.warn("Failed to record visit: {}", e.getMessage());
+                    }
+                });
+            });
+        }
     }
 
     @Override

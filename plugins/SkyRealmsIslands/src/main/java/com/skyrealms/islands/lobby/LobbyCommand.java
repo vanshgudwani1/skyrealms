@@ -69,15 +69,7 @@ public final class LobbyCommand implements CommandExecutor, TabCompleter {
         }
 
         Location spawn = lobbyService.getLobbySpawnLocation();
-        player.teleportAsync(spawn).thenAccept(success -> {
-            if (success) {
-                player.playSound(spawn, Sound.ENTITY_PLAYER_TELEPORT, 1.0f, 1.0f);
-                player.playSound(spawn, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.2f);
-                player.spawnParticle(Particle.CHERRY_LEAVES, spawn, 30, 0.8, 0.8, 0.8, 0.05);
-                player.sendMessage(Component.text("🌸 Teleported to the Celestial Dragon Nest Lobby.", NamedTextColor.LIGHT_PURPLE));
-            }
-        });
-
+        lobbyService.getTeleportWarmupService().teleportWithWarmup(player, spawn, "Spawn", null);
         return true;
     }
 

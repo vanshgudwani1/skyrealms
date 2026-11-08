@@ -131,6 +131,7 @@ public final class IslandsModule implements SkyModule {
 
         // 6. Initialize Celestial Dragon Nest Lobby Service & Commands
         com.skyrealms.islands.lobby.LobbyService lobbyService = new com.skyrealms.islands.lobby.LobbyService(plugin);
+        islandManager.setTeleportWarmupService(lobbyService.getTeleportWarmupService());
         com.skyrealms.islands.lobby.LobbyListener lobbyListener = new com.skyrealms.islands.lobby.LobbyListener(plugin, lobbyService, gui);
         Bukkit.getPluginManager().registerEvents(lobbyListener, plugin);
 
