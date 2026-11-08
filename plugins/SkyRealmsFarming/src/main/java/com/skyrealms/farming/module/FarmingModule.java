@@ -4,6 +4,19 @@ import com.skyrealms.economy.service.EconomyService;
 import com.skyrealms.farming.command.FarmCommand;
 import com.skyrealms.farming.command.GardenCommand;
 import com.skyrealms.farming.garden.*;
+import com.skyrealms.farming.garden.cinematic.DivineCinematicService;
+import com.skyrealms.farming.garden.intro.ElarionListener;
+import com.skyrealms.farming.garden.intro.ElarionService;
+import com.skyrealms.farming.garden.item.GardenItemFactory;
+import com.skyrealms.farming.garden.mastery.CropMasteryListener;
+import com.skyrealms.farming.garden.mastery.CropMasteryService;
+import com.skyrealms.farming.garden.mastery.DefaultCropMasteryService;
+import com.skyrealms.farming.garden.offering.DefaultOfferingService;
+import com.skyrealms.farming.garden.offering.OfferingListener;
+import com.skyrealms.farming.garden.offering.OfferingService;
+import com.skyrealms.farming.garden.quest.DefaultFarmingQuestService;
+import com.skyrealms.farming.garden.quest.FarmingQuestListener;
+import com.skyrealms.farming.garden.quest.FarmingQuestService;
 import com.skyrealms.farming.gui.FarmingGui;
 import com.skyrealms.farming.listener.FarmingListener;
 import com.skyrealms.farming.mutation.CropMutationEngine;
@@ -120,25 +133,50 @@ public final class FarmingModule implements SkyModule {
 
         this.farmingService = new DefaultFarmingService(generatorManager, progressionService, upgradeService, mutationEngine, islandService, gardenService);
 
-        // 3. Register Services in DI Registry and Bukkit ServicesManager
+        // 3. Register Core Services
         context.services().register(FarmingService.class, farmingService);
         context.services().register(GardenService.class, gardenService);
         Bukkit.getServicesManager().register(FarmingService.class, farmingService, plugin, ServicePriority.High);
         Bukkit.getServicesManager().register(GardenService.class, gardenService, plugin, ServicePriority.High);
+
+        // Phase G3 & G4 Services
+        DivineCinematicService cinematicService = new DivineCinematicService(plugin, gardenService, repository, islandService);
+        DefaultOfferingService offeringService = new DefaultOfferingService(plugin, repository, islandService, cinematicService);
+        DefaultFarmingQuestService questService = new DefaultFarmingQuestService(plugin, repository, progressionService, economyService);
+        ElarionService elarionService = new ElarionService(plugin, repository, questService);
+        DefaultCropMasteryService masteryService = new DefaultCropMasteryService(plugin, repository, economyService);
+
+        // Register custom offering crafting recipes
+        GardenItemFactory.registerRecipes(plugin);
+
+        context.services().register(OfferingService.class, offeringService);
+        context.services().register(FarmingQuestService.class, questService);
+        context.services().register(CropMasteryService.class, masteryService);
+        Bukkit.getServicesManager().register(OfferingService.class, offeringService, plugin, ServicePriority.High);
+        Bukkit.getServicesManager().register(FarmingQuestService.class, questService, plugin, ServicePriority.High);
+        Bukkit.getServicesManager().register(CropMasteryService.class, masteryService, plugin, ServicePriority.High);
 
         // 4. Register Event Listeners
         NaturalFarmingEngine naturalEngine = new NaturalFarmingEngine(plugin, gardenService, progressionService, context.eventBus());
         NaturalFarmingListener naturalFarmingListener = new NaturalFarmingListener(gardenService, naturalEngine, context.eventBus());
         FarmingListener farmingListener = new FarmingListener(farmingService, processor, islandService);
         GardenProtectionListener gardenProtectionListener = new GardenProtectionListener(gardenService, islandService);
+        OfferingListener offeringListener = new OfferingListener(offeringService, islandService, cinematicService);
+        FarmingQuestListener questListener = new FarmingQuestListener(gardenService, questService, context.eventBus());
+        ElarionListener elarionListener = new ElarionListener(gardenService, elarionService);
+        CropMasteryListener masteryListener = new CropMasteryListener(masteryService, context.eventBus());
 
         Bukkit.getPluginManager().registerEvents(naturalFarmingListener, plugin);
         Bukkit.getPluginManager().registerEvents(farmingListener, plugin);
         Bukkit.getPluginManager().registerEvents(gardenProtectionListener, plugin);
+        Bukkit.getPluginManager().registerEvents(offeringListener, plugin);
+        Bukkit.getPluginManager().registerEvents(questListener, plugin);
+        Bukkit.getPluginManager().registerEvents(elarionListener, plugin);
+        Bukkit.getPluginManager().registerEvents(masteryListener, plugin);
         Bukkit.getPluginManager().registerEvents(new FarmingGui(farmingService, FarmingGui.GuiType.MAIN_MENU, net.kyori.adventure.text.Component.empty(), null), plugin);
 
         // 5. Register /garden and /farm commands via DynamicCommandRegistrar
-        GardenCommand gardenCommand = new GardenCommand(gardenService, islandService);
+        GardenCommand gardenCommand = new GardenCommand(gardenService, islandService, offeringService, masteryService, questService);
         DynamicCommandRegistrar.register(
                 "skyrealms",
                 "garden",

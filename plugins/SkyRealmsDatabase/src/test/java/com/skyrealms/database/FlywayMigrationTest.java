@@ -40,7 +40,7 @@ class FlywayMigrationTest {
     }
 
     @Test
-    @DisplayName("Should apply V1, V2, V3, V4, and V5 migrations and create all core tables")
+    @DisplayName("Should apply V1, V2, V3, V4, V5, and V6 migrations and create all core tables")
     void shouldApplyMigrations() throws SQLException {
         DatabaseMigrationService migrationService = new DatabaseMigrationService(
                 databaseService.getDataSource(),
@@ -50,7 +50,7 @@ class FlywayMigrationTest {
         MigrateResult result = migrationService.runMigrations();
 
         assertThat(result.success).isTrue();
-        assertThat(result.migrationsExecuted).isGreaterThanOrEqualTo(5);
+        assertThat(result.migrationsExecuted).isGreaterThanOrEqualTo(6);
 
         Set<String> tables = new HashSet<>();
         try (Connection conn = databaseService.getConnection()) {
@@ -87,7 +87,9 @@ class FlywayMigrationTest {
                 "sr_garden_plots",
                 "sr_garden_unlocks",
                 "sr_crop_mastery",
-                "sr_player_research"
+                "sr_player_research",
+                "sr_garden_offerings",
+                "sr_farming_quests"
         );
     }
 }

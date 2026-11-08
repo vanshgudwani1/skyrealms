@@ -634,4 +634,237 @@ public final class FarmingRepository {
                 fertility, moisture, nutrientLevel
         );
     }
+
+    // =========================================================================
+    // Phase G3 & G4 Repository Methods
+    // =========================================================================
+
+    public record GardenOffering(UUID islandId, UUID submittedBy, int hayBalesCount, int carrotsCount, int sugarCaneCount, String status, Instant submittedAt) {}
+    public record GardenUnlock(UUID islandId, boolean offeringCompleted, boolean cinematicCompleted, Instant unlockedAt) {}
+    public record FarmingQuest(UUID playerUuid, String questId, String status, int tilledCount, int plantedCount, int harvestedCount, Instant completedAt, boolean claimedRewards, Instant updatedAt) {}
+    public record CropMasteryRecord(UUID playerUuid, String cropType, long masteryXp, int masteryLevel, String claimedMilestones, Instant updatedAt) {}
+
+    @NotNull
+    public Optional<GardenOffering> findOfferingByIsland(@NotNull UUID islandId) throws SQLException {
+        String sql = "SELECT island_id, submitted_by, hay_bales_count, carrots_count, sugar_cane_count, status, submitted_at FROM sr_garden_offerings WHERE island_id = ?";
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, islandId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(new GardenOffering(
+                            (UUID) rs.getObject("island_id"),
+                            (UUID) rs.getObject("submitted_by"),
+                            rs.getInt("hay_bales_count"),
+                            rs.getInt("carrots_count"),
+                            rs.getInt("sugar_cane_count"),
+                            rs.getString("status"),
+                            rs.getTimestamp("submitted_at").toInstant()
+                    ));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public void saveOffering(@NotNull GardenOffering offering) throws SQLException {
+        String sql = """
+            MERGE INTO sr_garden_offerings (island_id, submitted_by, hay_bales_count, carrots_count, sugar_cane_count, status, submitted_at)
+            KEY(island_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """;
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, offering.islandId());
+            ps.setObject(2, offering.submittedBy());
+            ps.setInt(3, offering.hayBalesCount());
+            ps.setInt(4, offering.carrotsCount());
+            ps.setInt(5, offering.sugarCaneCount());
+            ps.setString(6, offering.status());
+            ps.setTimestamp(7, Timestamp.from(offering.submittedAt()));
+            ps.executeUpdate();
+        }
+    }
+
+    @NotNull
+    public Optional<GardenUnlock> findGardenUnlock(@NotNull UUID islandId) throws SQLException {
+        String sql = "SELECT island_id, offering_completed, cinematic_completed, unlocked_at FROM sr_garden_unlocks WHERE island_id = ?";
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, islandId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Timestamp ts = rs.getTimestamp("unlocked_at");
+                    return Optional.of(new GardenUnlock(
+                            (UUID) rs.getObject("island_id"),
+                            rs.getBoolean("offering_completed"),
+                            rs.getBoolean("cinematic_completed"),
+                            ts != null ? ts.toInstant() : null
+                    ));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public void saveGardenUnlock(@NotNull GardenUnlock unlock) throws SQLException {
+        String sql = """
+            MERGE INTO sr_garden_unlocks (island_id, offering_completed, cinematic_completed, unlocked_at)
+            KEY(island_id)
+            VALUES (?, ?, ?, ?)
+        """;
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, unlock.islandId());
+            ps.setBoolean(2, unlock.offeringCompleted());
+            ps.setBoolean(3, unlock.cinematicCompleted());
+            ps.setTimestamp(4, unlock.unlockedAt() != null ? Timestamp.from(unlock.unlockedAt()) : null);
+            ps.executeUpdate();
+        }
+    }
+
+    public boolean hasCompletedElarionIntro(@NotNull UUID playerUuid) throws SQLException {
+        String sql = "SELECT elarion_intro_completed FROM sr_player_research WHERE player_uuid = ?";
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, playerUuid);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getBoolean("elarion_intro_completed");
+                }
+            }
+        }
+        return false;
+    }
+
+    public void setElarionIntroCompleted(@NotNull UUID playerUuid, boolean completed) throws SQLException {
+        String sql = """
+            MERGE INTO sr_player_research (player_uuid, elarion_intro_completed, updated_at)
+            KEY(player_uuid)
+            VALUES (?, ?, ?)
+        """;
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, playerUuid);
+            ps.setBoolean(2, completed);
+            ps.setTimestamp(3, Timestamp.from(Instant.now()));
+            ps.executeUpdate();
+        }
+    }
+
+    @NotNull
+    public Optional<FarmingQuest> findQuestProgress(@NotNull UUID playerUuid, @NotNull String questId) throws SQLException {
+        String sql = """
+            SELECT player_uuid, quest_id, status, tilled_count, planted_count, harvested_count, completed_at, claimed_rewards, updated_at
+            FROM sr_farming_quests
+            WHERE player_uuid = ? AND quest_id = ?
+        """;
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, playerUuid);
+            ps.setString(2, questId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Timestamp compTs = rs.getTimestamp("completed_at");
+                    return Optional.of(new FarmingQuest(
+                            (UUID) rs.getObject("player_uuid"),
+                            rs.getString("quest_id"),
+                            rs.getString("status"),
+                            rs.getInt("tilled_count"),
+                            rs.getInt("planted_count"),
+                            rs.getInt("harvested_count"),
+                            compTs != null ? compTs.toInstant() : null,
+                            rs.getBoolean("claimed_rewards"),
+                            rs.getTimestamp("updated_at").toInstant()
+                    ));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public void saveQuestProgress(@NotNull FarmingQuest quest) throws SQLException {
+        String sql = """
+            MERGE INTO sr_farming_quests (player_uuid, quest_id, status, tilled_count, planted_count, harvested_count, completed_at, claimed_rewards, updated_at)
+            KEY(player_uuid, quest_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """;
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, quest.playerUuid());
+            ps.setString(2, quest.questId());
+            ps.setString(3, quest.status());
+            ps.setInt(4, quest.tilledCount());
+            ps.setInt(5, quest.plantedCount());
+            ps.setInt(6, quest.harvestedCount());
+            ps.setTimestamp(7, quest.completedAt() != null ? Timestamp.from(quest.completedAt()) : null);
+            ps.setBoolean(8, quest.claimedRewards());
+            ps.setTimestamp(9, Timestamp.from(quest.updatedAt()));
+            ps.executeUpdate();
+        }
+    }
+
+    @NotNull
+    public Optional<CropMasteryRecord> findCropMastery(@NotNull UUID playerUuid, @NotNull String cropType) throws SQLException {
+        String sql = "SELECT player_uuid, crop_type, mastery_xp, mastery_level, claimed_milestones, updated_at FROM sr_crop_mastery WHERE player_uuid = ? AND crop_type = ?";
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, playerUuid);
+            ps.setString(2, cropType);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(new CropMasteryRecord(
+                            (UUID) rs.getObject("player_uuid"),
+                            rs.getString("crop_type"),
+                            rs.getLong("mastery_xp"),
+                            rs.getInt("mastery_level"),
+                            rs.getString("claimed_milestones"),
+                            rs.getTimestamp("updated_at").toInstant()
+                    ));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    @NotNull
+    public List<CropMasteryRecord> findAllCropMasteries(@NotNull UUID playerUuid) throws SQLException {
+        String sql = "SELECT player_uuid, crop_type, mastery_xp, mastery_level, claimed_milestones, updated_at FROM sr_crop_mastery WHERE player_uuid = ?";
+        List<CropMasteryRecord> masteries = new ArrayList<>();
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, playerUuid);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    masteries.add(new CropMasteryRecord(
+                            (UUID) rs.getObject("player_uuid"),
+                            rs.getString("crop_type"),
+                            rs.getLong("mastery_xp"),
+                            rs.getInt("mastery_level"),
+                            rs.getString("claimed_milestones"),
+                            rs.getTimestamp("updated_at").toInstant()
+                    ));
+                }
+            }
+        }
+        return masteries;
+    }
+
+    public void saveCropMastery(@NotNull CropMasteryRecord mastery) throws SQLException {
+        String sql = """
+            MERGE INTO sr_crop_mastery (player_uuid, crop_type, mastery_xp, mastery_level, claimed_milestones, updated_at)
+            KEY(player_uuid, crop_type)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """;
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, mastery.playerUuid());
+            ps.setString(2, mastery.cropType());
+            ps.setLong(3, mastery.masteryXp());
+            ps.setInt(4, mastery.masteryLevel());
+            ps.setString(5, mastery.claimedMilestones());
+            ps.setTimestamp(6, Timestamp.from(mastery.updatedAt()));
+            ps.executeUpdate();
+        }
+    }
 }

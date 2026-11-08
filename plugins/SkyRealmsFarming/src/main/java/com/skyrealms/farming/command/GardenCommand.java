@@ -3,6 +3,10 @@ package com.skyrealms.farming.command;
 import com.skyrealms.farming.garden.Garden;
 import com.skyrealms.farming.garden.GardenPlot;
 import com.skyrealms.farming.garden.GardenService;
+import com.skyrealms.farming.garden.item.GardenItemFactory;
+import com.skyrealms.farming.garden.mastery.CropMasteryService;
+import com.skyrealms.farming.garden.offering.OfferingService;
+import com.skyrealms.farming.garden.quest.FarmingQuestService;
 import com.skyrealms.islands.model.Island;
 import com.skyrealms.islands.service.IslandService;
 import net.kyori.adventure.text.Component;
@@ -15,24 +19,35 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
 /**
  * Command suite for the SkyRealms Garden System: /garden
+ * Supports teleportation, island lock verification, crop mastery GUI, quest tracking, and administrative controls.
  */
 public final class GardenCommand implements CommandExecutor, TabCompleter {
 
     private final GardenService gardenService;
     private final IslandService islandService;
+    private final OfferingService offeringService;
+    private final CropMasteryService masteryService;
+    private final FarmingQuestService questService;
 
     public GardenCommand(
             @NotNull GardenService gardenService,
-            @NotNull IslandService islandService
+            @NotNull IslandService islandService,
+            @NotNull OfferingService offeringService,
+            @NotNull CropMasteryService masteryService,
+            @NotNull FarmingQuestService questService
     ) {
         this.gardenService = Objects.requireNonNull(gardenService, "gardenService cannot be null");
         this.islandService = Objects.requireNonNull(islandService, "islandService cannot be null");
+        this.offeringService = Objects.requireNonNull(offeringService, "offeringService cannot be null");
+        this.masteryService = Objects.requireNonNull(masteryService, "masteryService cannot be null");
+        this.questService = Objects.requireNonNull(questService, "questService cannot be null");
     }
 
     @Override
@@ -62,6 +77,8 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
             case "leave" -> handleLeave(player);
             case "info" -> handleInfo(player);
             case "plots" -> handlePlots(player);
+            case "mastery", "skills" -> masteryService.openMasteryGui(player);
+            case "quest", "quests" -> handleQuest(player);
             case "admin" -> handleAdmin(player, args);
             default -> player.sendMessage(Component.text("Unknown subcommand. Type /garden help for options.", NamedTextColor.RED));
         }
@@ -70,9 +87,11 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
 
     private void sendHelp(@NotNull CommandSender sender) {
         sender.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.GREEN, TextDecoration.STRIKETHROUGH));
-        sender.sendMessage(Component.text("🌿 SkyRealms Garden Commands", NamedTextColor.GOLD, TextDecoration.BOLD));
+        sender.sendMessage(Component.text("🌸 SkyRealms Garden Commands", NamedTextColor.GOLD, TextDecoration.BOLD));
         sender.sendMessage(Component.text("/garden home ", NamedTextColor.YELLOW).append(Component.text("— Teleport to your Greenhouse Dome", NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("/garden leave ", NamedTextColor.YELLOW).append(Component.text("— Teleport back to your Island Home", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/garden mastery ", NamedTextColor.YELLOW).append(Component.text("— Open 10-crop Mastery progression GUI", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/garden quest ", NamedTextColor.YELLOW).append(Component.text("— View First Harvest quest objectives", NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("/garden info ", NamedTextColor.YELLOW).append(Component.text("— View your Garden coordinates & status", NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("/garden plots ", NamedTextColor.YELLOW).append(Component.text("— View status of all 16 Crop Plots", NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("/garden help ", NamedTextColor.YELLOW).append(Component.text("— Display this command guide", NamedTextColor.GRAY)));
@@ -86,8 +105,27 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        UUID islandId = optIsland.get().id();
+
+        // Check if the Garden is unlocked via Offering
+        if (!offeringService.isGardenUnlocked(islandId)) {
+            player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.LIGHT_PURPLE, TextDecoration.STRIKETHROUGH));
+            player.sendMessage(Component.text("✦ THE GARDEN IS LOCKED BY THE GODS ✦", NamedTextColor.GOLD, TextDecoration.BOLD));
+            player.sendMessage(Component.text("To gain permanent access to the Sakura Glass Garden, your island must make an offering:", NamedTextColor.YELLOW));
+            player.sendMessage(Component.empty());
+            player.sendMessage(Component.text("  • 3x Enchanted Hay Bales", NamedTextColor.WHITE));
+            player.sendMessage(Component.text("  • 3x Enchanted Carrots", NamedTextColor.WHITE));
+            player.sendMessage(Component.text("  • 3x Enchanted Sugar Cane", NamedTextColor.WHITE));
+            player.sendMessage(Component.empty());
+            player.sendMessage(Component.text("Place these items inside a chest renamed: ", NamedTextColor.GRAY)
+                    .append(Component.text("Offering to the Gods", NamedTextColor.GOLD, TextDecoration.BOLD)));
+            player.sendMessage(Component.text("on your island to initiate the divine ritual.", NamedTextColor.GRAY));
+            player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.LIGHT_PURPLE, TextDecoration.STRIKETHROUGH));
+            return;
+        }
+
         player.sendMessage(Component.text("🌿 Initiating teleport to your SkyRealms Greenhouse Garden...", TextColor.fromHexString("#77DD77")));
-        gardenService.teleportToGarden(player, optIsland.get().id());
+        gardenService.teleportToGarden(player, islandId);
     }
 
     private void handleLeave(@NotNull Player player) {
@@ -99,6 +137,28 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
 
         player.sendMessage(Component.text("🌸 Returning to your Island Home...", TextColor.fromHexString("#FF77A8")));
         gardenService.teleportToIsland(player, optIsland.get().id());
+    }
+
+    private void handleQuest(@NotNull Player player) {
+        Optional<FarmingQuestService.FarmingQuestProgress> opt = questService.getQuest(player.getUniqueId(), FarmingQuestService.QUEST_FIRST_HARVEST);
+        if (opt.isEmpty()) {
+            player.sendMessage(Component.text("You do not have any active quests. Visit your Garden to meet Elarion!", NamedTextColor.YELLOW));
+            return;
+        }
+
+        FarmingQuestService.FarmingQuestProgress q = opt.get();
+        player.sendMessage(Component.text("────────── [ Quest: First Harvest ] ──────────", NamedTextColor.GOLD));
+        player.sendMessage(Component.text("Status: ", NamedTextColor.GRAY)
+                .append(Component.text(q.isCompleted() ? "COMPLETED ✔" : "IN PROGRESS...", q.isCompleted() ? NamedTextColor.GREEN : NamedTextColor.YELLOW, TextDecoration.BOLD)));
+        player.sendMessage(Component.text("1. Till Farmland: ", NamedTextColor.WHITE)
+                .append(Component.text(Math.min(16, q.tilledCount()) + " / 16", NamedTextColor.AQUA)));
+        player.sendMessage(Component.text("2. Plant Wheat: ", NamedTextColor.WHITE)
+                .append(Component.text(Math.min(16, q.plantedCount()) + " / 16", NamedTextColor.AQUA)));
+        player.sendMessage(Component.text("3. Harvest Wheat: ", NamedTextColor.WHITE)
+                .append(Component.text(Math.min(16, q.harvestedCount()) + " / 16", NamedTextColor.AQUA)));
+        player.sendMessage(Component.text("Rewards: ", NamedTextColor.GRAY)
+                .append(Component.text("+500 Farming XP, +2,500 Coins, 16x Carrots", NamedTextColor.YELLOW)));
+        player.sendMessage(Component.text("─────────────────────────────────────────", NamedTextColor.GOLD));
     }
 
     private void handleInfo(@NotNull Player player) {
@@ -176,7 +236,7 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length < 2) {
-            sender.sendMessage(Component.text("Admin usage: /garden admin tp <player> | /garden admin unlockplot <player> <plot#>", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Admin usage: /garden admin tp <player> | unlockplot <player> <1-16> | giveitem <player> <hay|carrot|cane|hoe> [amount]", NamedTextColor.RED));
             return;
         }
 
@@ -201,6 +261,39 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
                 return;
             }
             gardenService.teleportToGarden(admin, opt.get().id());
+        } else if (adminSub.equals("giveitem")) {
+            if (args.length < 4) {
+                sender.sendMessage(Component.text("Usage: /garden admin giveitem <player> <hay|carrot|cane|hoe> [amount]", NamedTextColor.RED));
+                return;
+            }
+            Player target = Bukkit.getPlayer(args[2]);
+            if (target == null) {
+                sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED));
+                return;
+            }
+            String itemType = args[3].toLowerCase(Locale.ROOT);
+            int amount = 1;
+            if (args.length >= 5) {
+                try {
+                    amount = Math.max(1, Integer.parseInt(args[4]));
+                } catch (NumberFormatException ignored) {}
+            }
+
+            ItemStack item = switch (itemType) {
+                case "hay" -> GardenItemFactory.createEnchantedHayBale(amount);
+                case "carrot" -> GardenItemFactory.createEnchantedCarrot(amount);
+                case "cane" -> GardenItemFactory.createEnchantedSugarCane(amount);
+                case "hoe" -> GardenItemFactory.createNoviceHoe();
+                default -> null;
+            };
+
+            if (item == null) {
+                sender.sendMessage(Component.text("Invalid item type. Options: hay, carrot, cane, hoe", NamedTextColor.RED));
+                return;
+            }
+
+            target.getInventory().addItem(item);
+            sender.sendMessage(Component.text("✔ Gave " + amount + "x " + itemType + " to " + target.getName(), NamedTextColor.GREEN));
         } else if (adminSub.equals("unlockplot")) {
             if (args.length < 4) {
                 sender.sendMessage(Component.text("Usage: /garden admin unlockplot <player> <1-16>", NamedTextColor.RED));
@@ -241,14 +334,14 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
             @NotNull String[] args
     ) {
         if (args.length == 1) {
-            List<String> subs = new ArrayList<>(List.of("home", "leave", "info", "plots", "help"));
+            List<String> subs = new ArrayList<>(List.of("home", "leave", "info", "plots", "mastery", "quest", "help"));
             if (sender.isOp() || sender.hasPermission("skyrealms.garden.admin")) {
                 subs.add("admin");
             }
             return subs;
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("admin")) {
-            return List.of("tp", "unlockplot");
+            return List.of("tp", "unlockplot", "giveitem");
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("admin")) {
             List<String> names = new ArrayList<>();
@@ -256,6 +349,9 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
                 names.add(p.getName());
             }
             return names;
+        }
+        if (args.length == 4 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("giveitem")) {
+            return List.of("hay", "carrot", "cane", "hoe");
         }
         return List.of();
     }
