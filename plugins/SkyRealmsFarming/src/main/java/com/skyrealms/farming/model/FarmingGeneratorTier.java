@@ -118,4 +118,26 @@ public enum FarmingGeneratorTier {
     public boolean supportsCrop(@NotNull Material material) {
         return cropMaterials.contains(material);
     }
+
+    @org.jetbrains.annotations.Nullable
+    public FarmingGeneratorTier nextTier() {
+        return switch (this) {
+            case TIER_1_WHEAT -> TIER_2_ROOT;
+            case TIER_2_ROOT -> TIER_3_FRUIT;
+            case TIER_3_FRUIT -> TIER_4_TROPICAL;
+            case TIER_4_TROPICAL -> TIER_5_MYSTIC;
+            case TIER_5_MYSTIC -> null;
+        };
+    }
+
+    @NotNull
+    public java.math.BigDecimal evolutionCost() {
+        return switch (this) {
+            case TIER_1_WHEAT -> java.math.BigDecimal.valueOf(5000);
+            case TIER_2_ROOT -> java.math.BigDecimal.valueOf(20000);
+            case TIER_3_FRUIT -> java.math.BigDecimal.valueOf(75000);
+            case TIER_4_TROPICAL -> java.math.BigDecimal.valueOf(250000);
+            case TIER_5_MYSTIC -> java.math.BigDecimal.ZERO;
+        };
+    }
 }

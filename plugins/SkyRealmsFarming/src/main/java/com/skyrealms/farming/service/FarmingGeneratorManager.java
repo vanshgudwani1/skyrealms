@@ -1,26 +1,33 @@
 package com.skyrealms.farming.service;
 
+import com.skyrealms.economy.service.EconomyService;
 import com.skyrealms.farming.event.FarmingGeneratorActivateEvent;
 import com.skyrealms.farming.event.FarmingGeneratorCreateEvent;
 import com.skyrealms.farming.model.*;
 import com.skyrealms.farming.repository.FarmingRepository;
 import com.skyrealms.islands.event.IslandDeletedEvent;
+import com.skyrealms.islands.model.Island;
 import com.skyrealms.islands.service.IslandService;
 import com.skyrealms.platform.api.event.EventBus;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Particle;
+import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.block.data.Ageable;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
@@ -40,7 +47,15 @@ public final class FarmingGeneratorManager implements AutoCloseable {
     private final FarmingRepository repository;
     private final FarmingGeneratorValidator validator;
     private final EventBus eventBus;
+    private final IslandService islandService;
     private final ExecutorService executor;
+
+    private FarmingHologramService hologramService;
+    private FarmingTerraformService terraformService;
+    private OverclockManager overclockManager;
+    private HarvestComboTracker comboTracker;
+    private EconomyService economyService;
+    private FarmingProgressionService progressionService;
 
     // Cache: Generator UUID -> FarmingGenerator
     private final Map<UUID, FarmingGenerator> generators = new ConcurrentHashMap<>();
@@ -57,12 +72,14 @@ public final class FarmingGeneratorManager implements AutoCloseable {
             @NotNull Plugin plugin,
             @NotNull FarmingRepository repository,
             @NotNull FarmingGeneratorValidator validator,
-            @NotNull EventBus eventBus
+            @NotNull EventBus eventBus,
+            @NotNull IslandService islandService
     ) {
         this.plugin = plugin;
         this.repository = repository;
         this.validator = validator;
         this.eventBus = eventBus;
+        this.islandService = islandService;
         this.executor = Executors.newFixedThreadPool(2, r -> {
             Thread t = new Thread(r, "SkyRealms-Farming-Manager-Worker");
             t.setDaemon(true);
@@ -75,14 +92,49 @@ public final class FarmingGeneratorManager implements AutoCloseable {
         });
     }
 
+    public void setServices(
+            @NotNull FarmingHologramService hologramService,
+            @NotNull FarmingTerraformService terraformService,
+            @NotNull OverclockManager overclockManager,
+            @NotNull HarvestComboTracker comboTracker,
+            @NotNull EconomyService economyService,
+            @NotNull FarmingProgressionService progressionService
+    ) {
+        this.hologramService = hologramService;
+        this.terraformService = terraformService;
+        this.overclockManager = overclockManager;
+        this.comboTracker = comboTracker;
+        this.economyService = economyService;
+        this.progressionService = progressionService;
+    }
+
+    public FarmingHologramService hologramService() {
+        return hologramService;
+    }
+
+    public FarmingTerraformService terraformService() {
+        return terraformService;
+    }
+
+    public OverclockManager overclockManager() {
+        return overclockManager;
+    }
+
+    public HarvestComboTracker comboTracker() {
+        return comboTracker;
+    }
+
     /**
-     * Loads all active generators on server boot into memory.
+     * Loads all active generators on server boot into memory and recreates their holograms.
      */
     public void loadActiveGenerators() {
         try {
             List<FarmingGenerator> loaded = repository.loadAllActiveGenerators();
             for (FarmingGenerator gen : loaded) {
                 indexGenerator(gen);
+                if (hologramService != null) {
+                    hologramService.createOrUpdateHologram(gen, "&a● READY TO HARVEST");
+                }
             }
             LOGGER.info("Loaded {} active farming generators from database.", loaded.size());
         } catch (SQLException e) {
@@ -91,27 +143,48 @@ public final class FarmingGeneratorManager implements AutoCloseable {
     }
 
     /**
-     * Creates and activates a new farming generator.
+     * Validates placement, registers the generator, and triggers the Earth Bloom animation.
      */
     @NotNull
-    public CompletableFuture<FarmingGeneratorValidator.ValidationResult> createAndActivateGenerator(
+    public CompletableFuture<FarmingGeneratorValidator.ValidationResult> createAndTerraformGenerator(
             @NotNull Player player,
             @NotNull Location coreLocation,
             @NotNull FarmingGeneratorTier tier,
-            @NotNull UUID islandId
+            @Nullable Map<String, Integer> initialUpgrades
     ) {
-        int currentCount = getGeneratorsByIsland(islandId).size();
-        int defaultCapacity = 8;
+        Optional<Island> optIsland = islandService.getIslandAt(coreLocation);
+        if (optIsland.isEmpty()) {
+            return CompletableFuture.completedFuture(
+                    FarmingGeneratorValidator.ValidationResult.failure("Must be placed inside an active SkyBlock island.")
+            );
+        }
 
-        FarmingGeneratorValidator.ValidationResult validation = validator.validateStructure(
-                player, coreLocation, tier, currentCount, defaultCapacity
+        UUID islandId = optIsland.get().id();
+        int currentCount = getGeneratorsByIsland(islandId).size();
+
+        FarmingGeneratorValidator.ValidationResult validation = validator.validatePlacement(
+                player, coreLocation, tier, currentCount
         );
 
         if (!validation.valid()) {
+            // Draw red dust particles at invalid locations
+            World w = coreLocation.getWorld();
+            if (w != null) {
+                for (Location loc : validation.invalidLocations()) {
+                    w.spawnParticle(Particle.DUST, loc, 5, 0.1, 0.1, 0.1, new Particle.DustOptions(org.bukkit.Color.RED, 1.2f));
+                }
+            }
             return CompletableFuture.completedFuture(validation);
         }
 
         UUID generatorId = UUID.randomUUID();
+        List<GeneratorUpgrade> upgradesList = new ArrayList<>();
+        if (initialUpgrades != null) {
+            for (Map.Entry<String, Integer> entry : initialUpgrades.entrySet()) {
+                upgradesList.add(new GeneratorUpgrade(entry.getKey(), entry.getValue(), Instant.now()));
+            }
+        }
+
         FarmingGenerator generator = new FarmingGenerator(
                 generatorId,
                 islandId,
@@ -125,7 +198,7 @@ public final class FarmingGeneratorManager implements AutoCloseable {
                 0L,
                 Instant.now(),
                 Instant.now(),
-                Collections.emptyList()
+                upgradesList
         );
         generator.setCropNodes(validation.detectedNodes());
 
@@ -134,13 +207,15 @@ public final class FarmingGeneratorManager implements AutoCloseable {
                 repository.saveGenerator(generator);
                 indexGenerator(generator);
 
-                // Run main thread initial crop planting
+                // Run main thread Earth Bloom auto-terraforming sequence
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    plantInitialCrops(generator);
+                    if (terraformService != null) {
+                        terraformService.executeTerraformAnimation(player, generator, () -> {
+                            eventBus.publishAsync(new FarmingGeneratorCreateEvent(generator, player.getUniqueId()));
+                            eventBus.publishAsync(new FarmingGeneratorActivateEvent(generator, player.getUniqueId()));
+                        });
+                    }
                 });
-
-                eventBus.publishAsync(new FarmingGeneratorCreateEvent(generator, player.getUniqueId()));
-                eventBus.publishAsync(new FarmingGeneratorActivateEvent(generator, player.getUniqueId()));
 
                 return validation;
             } catch (SQLException e) {
@@ -148,28 +223,6 @@ public final class FarmingGeneratorManager implements AutoCloseable {
                 return FarmingGeneratorValidator.ValidationResult.failure("Database error occurred while activating generator.");
             }
         }, executor);
-    }
-
-    private void plantInitialCrops(FarmingGenerator generator) {
-        World world = Bukkit.getWorld(generator.worldName());
-        if (world == null) return;
-
-        FarmingGeneratorTier tier = generator.tier();
-        Material targetMaterial = tier.primaryDropMaterial() == Material.WHEAT_SEEDS ? Material.WHEAT :
-                (tier == FarmingGeneratorTier.TIER_1_WHEAT ? Material.WHEAT :
-                        (tier == FarmingGeneratorTier.TIER_2_ROOT ? Material.CARROTS :
-                                (tier == FarmingGeneratorTier.TIER_3_FRUIT ? Material.MELON :
-                                        (tier == FarmingGeneratorTier.TIER_4_TROPICAL ? Material.SUGAR_CANE : Material.NETHER_WART))));
-
-        for (CropNode node : generator.cropNodes()) {
-            Block block = world.getBlockAt(node.x(), node.y(), node.z());
-            block.setType(targetMaterial, false);
-            BlockData data = block.getBlockData();
-            if (data instanceof Ageable ageable) {
-                ageable.setAge(ageable.getMaximumAge());
-                block.setBlockData(ageable, false);
-            }
-        }
     }
 
     public void indexGenerator(@NotNull FarmingGenerator generator) {
@@ -191,6 +244,10 @@ public final class FarmingGeneratorManager implements AutoCloseable {
         for (CropNode node : generator.cropNodes()) {
             long nodeKey = locationToKey(node.worldName(), node.x(), node.y(), node.z());
             cropLocationIndex.remove(nodeKey);
+        }
+
+        if (hologramService != null) {
+            hologramService.removeHologram(generator);
         }
     }
 
@@ -251,6 +308,125 @@ public final class FarmingGeneratorManager implements AutoCloseable {
     }
 
     /**
+     * Safely dismantles a generator, clears core block, and refunds custom Core item with upgrades.
+     */
+    @NotNull
+    public CompletableFuture<Boolean> dismantleGenerator(@NotNull Player player, @NotNull FarmingGenerator generator) {
+        UUID generatorId = generator.generatorId();
+        unindexGenerator(generator);
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                repository.deleteGenerator(generatorId);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    World w = Bukkit.getWorld(generator.worldName());
+                    if (w != null) {
+                        Block coreBlock = w.getBlockAt(generator.coreX(), generator.coreY(), generator.coreZ());
+                        coreBlock.setType(Material.AIR);
+
+                        Map<String, Integer> preservedUpgrades = new HashMap<>();
+                        for (GeneratorUpgrade u : generator.upgrades().values()) {
+                            preservedUpgrades.put(u.key(), u.level());
+                        }
+
+                        ItemStack refundedCore = FarmingCoreItemFactory.createCoreItem(generator.tier(), preservedUpgrades);
+                        var leftover = player.getInventory().addItem(refundedCore);
+                        for (ItemStack drop : leftover.values()) {
+                            w.dropItemNaturally(player.getLocation(), drop);
+                        }
+
+                        w.playSound(coreBlock.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 1.0f, 1.0f);
+                        w.spawnParticle(Particle.POOF, coreBlock.getLocation().clone().add(0.5, 0.5, 0.5), 15, 0.3, 0.3, 0.3, 0.05);
+                        player.sendMessage(Component.text("✦ [Farming Generator] Safely dismantled! Your Core has been refunded with upgrades preserved.", NamedTextColor.GREEN));
+                    }
+                });
+                return true;
+            } catch (SQLException e) {
+                LOGGER.error("Failed to delete generator during dismantle: {}", e.getMessage(), e);
+                return false;
+            }
+        }, executor);
+    }
+
+    /**
+     * Evolves an existing generator in-place to the next progression tier.
+     */
+    @NotNull
+    public CompletableFuture<Boolean> evolveGenerator(@NotNull Player player, @NotNull FarmingGenerator generator) {
+        FarmingGeneratorTier nextTier = generator.tier().nextTier();
+        if (nextTier == null) {
+            player.sendMessage(Component.text("⚠ Generator is already at the maximum tier (Mystic)!", NamedTextColor.RED));
+            return CompletableFuture.completedFuture(false);
+        }
+
+        if (progressionService != null) {
+            FarmingPlayerProgress progress = progressionService.getProgress(player.getUniqueId());
+            if (progress.farmingLevel() < nextTier.requiredFarmingLevel()) {
+                player.sendMessage(Component.text("⚠ You must reach Farming Level " + nextTier.requiredFarmingLevel() + " to evolve to " + nextTier.displayName() + "!", NamedTextColor.RED));
+                return CompletableFuture.completedFuture(false);
+            }
+        }
+
+        BigDecimal cost = nextTier.evolutionCost();
+        if (economyService == null) {
+            return CompletableFuture.completedFuture(false);
+        }
+
+        String idKey = "farm-evolve-" + generator.generatorId() + "-" + nextTier.name();
+        return economyService.withdraw(player.getUniqueId(), "coins", cost, "Evolve Generator to " + nextTier.name(), idKey).thenApply(txResult -> {
+            if (!txResult.isSuccess()) {
+                player.sendMessage(Component.text("⚠ Insufficient coins! Evolution requires " + cost + " Coins.", NamedTextColor.RED));
+                return false;
+            }
+
+            generator.setTier(nextTier);
+            try {
+                repository.saveGenerator(generator);
+            } catch (SQLException e) {
+                LOGGER.error("Failed to persist evolved tier for generator {}: {}", generator.generatorId(), e.getMessage(), e);
+            }
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                World w = Bukkit.getWorld(generator.worldName());
+                Location coreLoc = new Location(w, generator.coreX() + 0.5, generator.coreY() + 0.5, generator.coreZ() + 0.5);
+
+                if (hologramService != null) {
+                    hologramService.createOrUpdateHologram(generator, "&a● READY TO HARVEST");
+                }
+
+                if (w != null) {
+                    Material cropMat = switch (nextTier) {
+                        case TIER_1_WHEAT -> Material.WHEAT;
+                        case TIER_2_ROOT -> Material.CARROTS;
+                        case TIER_3_FRUIT -> Material.MELON;
+                        case TIER_4_TROPICAL -> Material.SUGAR_CANE;
+                        case TIER_5_MYSTIC -> Material.NETHER_WART;
+                    };
+
+                    for (CropNode node : generator.cropNodes()) {
+                        Block b = w.getBlockAt(node.x(), node.y(), node.z());
+                        b.setType(cropMat, false);
+                        if (b.getBlockData() instanceof org.bukkit.block.data.Ageable ageable) {
+                            ageable.setAge(ageable.getMaximumAge());
+                            b.setBlockData(ageable, false);
+                        }
+                        w.spawnParticle(Particle.HAPPY_VILLAGER, new Location(w, node.x() + 0.5, node.y() + 0.4, node.z() + 0.5), 5, 0.2, 0.2, 0.2, 0.0);
+                    }
+
+                    w.playSound(coreLoc, Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.2f);
+                    w.playSound(coreLoc, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f);
+                    w.spawnParticle(Particle.TOTEM_OF_UNDYING, coreLoc.clone().add(0, 1.0, 0), 30, 0.5, 0.5, 0.5, 0.1);
+                }
+
+                player.sendMessage(Component.text("★ [Generator Evolved] ", NamedTextColor.GOLD, TextDecoration.BOLD)
+                        .append(Component.text("Successfully evolved to " + nextTier.displayName() + " for " + cost + " Coins!", NamedTextColor.GREEN)));
+            });
+
+            return true;
+        });
+    }
+
+    /**
      * Handles island deletion: cleans up all active generators tied to that island.
      */
     public void onIslandDeleted(@NotNull UUID islandId) {
@@ -268,7 +444,6 @@ public final class FarmingGeneratorManager implements AutoCloseable {
     }
 
     public static long locationToKey(@NotNull String world, int x, int y, int z) {
-        // Simple hash key combining coordinates
         long h = world.hashCode();
         h = 31 * h + x;
         h = 31 * h + y;

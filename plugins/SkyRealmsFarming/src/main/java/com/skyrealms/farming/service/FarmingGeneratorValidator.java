@@ -3,7 +3,6 @@ package com.skyrealms.farming.service;
 import com.skyrealms.farming.model.CropNode;
 import com.skyrealms.farming.model.FarmingGeneratorTier;
 import com.skyrealms.islands.model.Island;
-import com.skyrealms.islands.model.IslandPermission;
 import com.skyrealms.islands.model.IslandRole;
 import com.skyrealms.islands.service.IslandService;
 import org.bukkit.Location;
@@ -16,7 +15,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 
 /**
- * Validates physical structure, island ownership, and block layouts for farming generators.
+ * Validates 5x5 ground footprints, island permissions, and structural clearance for farming generators.
  */
 public final class FarmingGeneratorValidator {
 
@@ -34,39 +33,41 @@ public final class FarmingGeneratorValidator {
         this.maxGeneratorsPerIsland = Math.max(1, maxGeneratorsPerIsland);
     }
 
-    public record ValidationResult(boolean valid, @NotNull String message, @NotNull List<CropNode> detectedNodes) {
+    public record ValidationResult(
+            boolean valid,
+            @NotNull String message,
+            @NotNull List<CropNode> detectedNodes,
+            @NotNull List<Location> invalidLocations
+    ) {
         public static ValidationResult success(@NotNull List<CropNode> nodes) {
-            return new ValidationResult(true, "Structure is valid.", nodes);
+            return new ValidationResult(true, "Structure is valid.", nodes, Collections.emptyList());
+        }
+
+        public static ValidationResult failure(@NotNull String message, @NotNull List<Location> invalidLocations) {
+            return new ValidationResult(false, message, Collections.emptyList(), invalidLocations);
         }
 
         public static ValidationResult failure(@NotNull String message) {
-            return new ValidationResult(false, message, Collections.emptyList());
+            return failure(message, Collections.emptyList());
         }
     }
 
     /**
-     * Validates whether a physical generator can be registered or activated at the given core location.
+     * Validates whether a 5x5 flat ground area exists and is eligible for generator placement.
      */
     @NotNull
-    public ValidationResult validateStructure(
+    public ValidationResult validatePlacement(
             @NotNull Player player,
             @NotNull Location coreLocation,
             @NotNull FarmingGeneratorTier tier,
-            int currentIslandGeneratorCount,
-            int capacityLimit
+            int currentIslandGeneratorCount
     ) {
         World world = coreLocation.getWorld();
         if (world == null) {
-            return ValidationResult.failure("World not found.");
+            return ValidationResult.failure("Invalid world.");
         }
 
-        // 1. Core block material check
-        Block coreBlock = coreLocation.getBlock();
-        if (coreBlock.getType() != coreMaterial) {
-            return ValidationResult.failure("Core block must be " + coreMaterial.name() + ".");
-        }
-
-        // 2. Island ownership and boundary check
+        // 1. Island ownership & role check
         Optional<Island> optIsland = islandService.getIslandAt(coreLocation);
         if (optIsland.isEmpty()) {
             return ValidationResult.failure("Farming Generators must be built inside a SkyBlock island.");
@@ -79,62 +80,73 @@ public final class FarmingGeneratorValidator {
 
         IslandRole role = island.getRole(player.getUniqueId());
         if (role == IslandRole.VISITOR && !player.hasPermission("skyrealms.admin")) {
-            return ValidationResult.failure("Visitors cannot activate or modify farming generators.");
+            return ValidationResult.failure("Visitors cannot place or modify farming generators.");
         }
 
         if (currentIslandGeneratorCount >= maxGeneratorsPerIsland && !player.hasPermission("skyrealms.admin")) {
             return ValidationResult.failure("This island has reached the maximum limit of " + maxGeneratorsPerIsland + " generators.");
         }
 
-        // 3. Scan physical structure in 5x5 footprint around core
-        int cx = coreBlock.getX();
-        int cy = coreBlock.getY();
-        int cz = coreBlock.getZ();
+        // 2. Strict 5x5 Flat Ground Validation
+        int cx = coreLocation.getBlockX();
+        int cy = coreLocation.getBlockY();
+        int cz = coreLocation.getBlockZ();
 
-        boolean hasWater = false;
-        List<CropNode> validNodes = new ArrayList<>();
+        List<Location> invalidLocs = new ArrayList<>();
+        List<CropNode> cropNodes = new ArrayList<>();
 
         for (int dx = -2; dx <= 2; dx++) {
             for (int dz = -2; dz <= 2; dz++) {
-                if (dx == 0 && dz == 0) continue; // Skip core position
+                int groundX = cx + dx;
+                int groundY = cy - 1;
+                int groundZ = cz + dz;
 
-                Block block = world.getBlockAt(cx + dx, cy, cz + dz);
-                Block below = world.getBlockAt(cx + dx, cy - 1, cz + dz);
+                Block groundBlock = world.getBlockAt(groundX, groundY, groundZ);
+                Block cropLayerBlock = world.getBlockAt(groundX, cy, groundZ);
 
-                // Water check within radius 2
-                if (block.getType() == Material.WATER || below.getType() == Material.WATER) {
-                    hasWater = true;
+                // Check ground material
+                boolean validGround = isValidGroundForTier(groundBlock.getType(), tier);
+                if (!validGround) {
+                    invalidLocs.add(new Location(world, groundX + 0.5, groundY + 1.1, groundZ + 0.5));
                 }
 
-                // Soil check
-                if (tier.requiredSoilMaterials().contains(below.getType())) {
-                    // Check supporting block under soil
-                    Block baseBlock = world.getBlockAt(cx + dx, cy - 2, cz + dz);
-                    if (!baseBlock.getType().isSolid()) {
-                        continue; // Soil must have solid foundation
-                    }
-
-                    // Check crop position directly above soil
-                    if (block.getType().isAir() || tier.supportsCrop(block.getType())) {
-                        validNodes.add(new CropNode(world.getName(), cx + dx, cy, cz + dz, tier.primaryDropMaterial()));
+                // Check crop clearance above ground (except center core position)
+                if (dx != 0 || dz != 0) {
+                    if (!cropLayerBlock.getType().isAir() && !tier.supportsCrop(cropLayerBlock.getType())) {
+                        invalidLocs.add(new Location(world, groundX + 0.5, cy + 0.5, groundZ + 0.5));
+                    } else if (validGround) {
+                        cropNodes.add(new CropNode(world.getName(), groundX, cy, groundZ, tier.primaryDropMaterial()));
                     }
                 }
             }
         }
 
-        // Water requirement (Tier 1-3 requires water irrigation)
-        if (tier.requiredSoilMaterials().contains(Material.FARMLAND) && !hasWater) {
-            return ValidationResult.failure("No water irrigation source found within 2 blocks of the farmland.");
+        if (!invalidLocs.isEmpty()) {
+            return ValidationResult.failure(
+                    "Requires a flat 5x5 unobstructed area of " + getGroundDescriptionForTier(tier) + ".",
+                    invalidLocs
+            );
         }
 
-        if (validNodes.isEmpty()) {
-            return ValidationResult.failure("No valid farmland/soil nodes found around the core for tier " + tier.displayName() + ".");
+        return ValidationResult.success(cropNodes);
+    }
+
+    private boolean isValidGroundForTier(Material material, FarmingGeneratorTier tier) {
+        if (tier == FarmingGeneratorTier.TIER_4_TROPICAL) {
+            return material == Material.SAND || material == Material.RED_SAND
+                    || material == Material.DIRT || material == Material.GRASS_BLOCK || material == Material.FARMLAND;
+        } else if (tier == FarmingGeneratorTier.TIER_5_MYSTIC) {
+            return material == Material.SOUL_SAND || material == Material.SOUL_SOIL
+                    || material == Material.END_STONE || material == Material.DIRT || material == Material.GRASS_BLOCK;
+        } else {
+            return material == Material.DIRT || material == Material.GRASS_BLOCK
+                    || material == Material.COARSE_DIRT || material == Material.ROOTED_DIRT || material == Material.FARMLAND;
         }
+    }
 
-        // Truncate to generator capacity limit
-        int maxAllowed = Math.min(validNodes.size(), capacityLimit);
-        List<CropNode> activeNodes = validNodes.subList(0, maxAllowed);
-
-        return ValidationResult.success(activeNodes);
+    private String getGroundDescriptionForTier(FarmingGeneratorTier tier) {
+        if (tier == FarmingGeneratorTier.TIER_4_TROPICAL) return "Sand or Dirt";
+        if (tier == FarmingGeneratorTier.TIER_5_MYSTIC) return "Soul Sand or Dirt";
+        return "Dirt or Grass";
     }
 }

@@ -23,7 +23,7 @@ import java.util.Objects;
 
 /**
  * SkyRealms Farming Module.
- * Provides physical structure-based farming generators, progression, crop mutations, and economy upgrades.
+ * Provides physical structure-based farming generators, progression, crop mutations, DecentHolograms, and economy upgrades.
  */
 public final class FarmingModule implements SkyModule {
 
@@ -35,6 +35,7 @@ public final class FarmingModule implements SkyModule {
 
     private FarmingGeneratorManager generatorManager;
     private FarmingProgressionService progressionService;
+    private FarmingHologramService hologramService;
     private FarmingService farmingService;
 
     public FarmingModule(@NotNull JavaPlugin plugin) {
@@ -94,8 +95,18 @@ public final class FarmingModule implements SkyModule {
         int maxGenerators = plugin.getConfig().getInt("generator.default.max-generators-per-island", 5);
         FarmingGeneratorValidator validator = new FarmingGeneratorValidator(islandService, coreMaterial, maxGenerators);
 
-        this.generatorManager = new FarmingGeneratorManager(plugin, repository, validator, context.eventBus());
-        FarmingGeneratorProcessor processor = new FarmingGeneratorProcessor(plugin, progressionService, mutationEngine, repository, context.eventBus());
+        this.hologramService = new FarmingHologramService(plugin);
+        FarmingTerraformService terraformService = new FarmingTerraformService(plugin, hologramService);
+        OverclockManager overclockManager = new OverclockManager(plugin, hologramService);
+        HarvestComboTracker comboTracker = new HarvestComboTracker();
+
+        this.generatorManager = new FarmingGeneratorManager(plugin, repository, validator, context.eventBus(), islandService);
+        generatorManager.setServices(hologramService, terraformService, overclockManager, comboTracker, economyService, progressionService);
+
+        FarmingGeneratorProcessor processor = new FarmingGeneratorProcessor(
+                plugin, progressionService, mutationEngine, repository, context.eventBus(),
+                hologramService, overclockManager, comboTracker
+        );
 
         this.farmingService = new DefaultFarmingService(generatorManager, progressionService, upgradeService, mutationEngine, islandService);
 
@@ -103,7 +114,7 @@ public final class FarmingModule implements SkyModule {
         context.services().register(FarmingService.class, farmingService);
         Bukkit.getServicesManager().register(FarmingService.class, farmingService, plugin, ServicePriority.High);
 
-        // 3. Load active generators from database
+        // 3. Load active generators from database and re-spawn DecentHolograms
         generatorManager.loadActiveGenerators();
 
         // 4. Register Event Listeners
@@ -117,7 +128,7 @@ public final class FarmingModule implements SkyModule {
                 "skyrealms",
                 "farm",
                 "Primary SkyRealms farming generator and progression command",
-                "/farm [help|stats|generators|generator]",
+                "/farm [help|stats|generators|generator|core]",
                 List.of("farming"),
                 "skyrealms.farming.base",
                 PermissionDefault.TRUE,
@@ -127,7 +138,7 @@ public final class FarmingModule implements SkyModule {
         );
 
         state = ModuleState.ENABLED;
-        context.logger().info("SkyRealms Farming module successfully enabled.");
+        context.logger().info("SkyRealms Farming module successfully enabled with DecentHolograms & Auto-Terraforming.");
     }
 
     @Override
@@ -147,5 +158,9 @@ public final class FarmingModule implements SkyModule {
 
     public FarmingService farmingService() {
         return farmingService;
+    }
+
+    public FarmingHologramService hologramService() {
+        return hologramService;
     }
 }

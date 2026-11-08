@@ -76,13 +76,33 @@ public final class DefaultFarmingService implements FarmingService {
             );
         }
 
-        return generatorManager.createAndActivateGenerator(player, coreLocation, tier, optIsland.get().id());
+        return generatorManager.createAndTerraformGenerator(player, coreLocation, tier, null);
     }
 
     @Override
     @NotNull
     public CompletableFuture<Boolean> removeGenerator(@NotNull UUID generatorId) {
         return generatorManager.removeGenerator(generatorId);
+    }
+
+    @Override
+    @NotNull
+    public CompletableFuture<Boolean> evolveGenerator(@NotNull Player player, @NotNull UUID generatorId) {
+        Optional<FarmingGenerator> optGen = generatorManager.getGenerator(generatorId);
+        if (optGen.isEmpty()) {
+            return CompletableFuture.completedFuture(false);
+        }
+        return generatorManager.evolveGenerator(player, optGen.get());
+    }
+
+    @Override
+    @NotNull
+    public CompletableFuture<Boolean> dismantleGenerator(@NotNull Player player, @NotNull UUID generatorId) {
+        Optional<FarmingGenerator> optGen = generatorManager.getGenerator(generatorId);
+        if (optGen.isEmpty()) {
+            return CompletableFuture.completedFuture(false);
+        }
+        return generatorManager.dismantleGenerator(player, optGen.get());
     }
 
     @Override

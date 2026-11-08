@@ -202,6 +202,43 @@ public final class FarmingGui implements InventoryHolder, Listener {
         // Slot 25: XP BOOST
         addUpgradeButton(25, GeneratorUpgrade.KEY_XP_BOOST, "⭐ Farming XP Booster", Material.EXPERIENCE_BOTTLE, generator, upgradeService);
 
+        // Slot 38: Evolve Generator Tier
+        FarmingGeneratorTier nextTier = generator.tier().nextTier();
+        if (nextTier != null) {
+            inventory.setItem(38, createIcon(
+                    Material.NETHER_STAR,
+                    Component.text("🌟 Evolve to " + nextTier.displayName(), NamedTextColor.GOLD, TextDecoration.BOLD),
+                    List.of(
+                            Component.text("• Required Level: ", NamedTextColor.GRAY).append(Component.text("Level " + nextTier.requiredFarmingLevel(), NamedTextColor.YELLOW, TextDecoration.BOLD)),
+                            Component.text("• Evolution Cost: ", NamedTextColor.GRAY).append(Component.text(nextTier.evolutionCost() + " Coins", NamedTextColor.GOLD, TextDecoration.BOLD)),
+                            Component.text("• Transforms all farmland crop nodes to " + nextTier.displayName() + "!", NamedTextColor.AQUA),
+                            Component.empty(),
+                            Component.text("▶ Click to evolve generator tier", NamedTextColor.GREEN)
+                    )
+            ));
+        } else {
+            inventory.setItem(38, createIcon(
+                    Material.NETHER_STAR,
+                    Component.text("★ MAXIMUM TIER (MYSTIC) ★", NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD),
+                    List.of(
+                            Component.text("This generator has achieved maximum arcane mastery.", NamedTextColor.GRAY)
+                    )
+            ));
+        }
+
+        // Slot 42: Dismantle & Refund
+        inventory.setItem(42, createIcon(
+                Material.TNT_MINECART,
+                Component.text("✖ Dismantle & Refund Core", NamedTextColor.RED, TextDecoration.BOLD),
+                List.of(
+                        Component.text("Safely deactivates this generator.", NamedTextColor.GRAY),
+                        Component.text("Your Farming Core will be returned to your", NamedTextColor.GRAY),
+                        Component.text("inventory with all upgrades preserved.", NamedTextColor.GRAY),
+                        Component.empty(),
+                        Component.text("▶ Click to dismantle generator", NamedTextColor.RED)
+                )
+        ));
+
         // Return button at Slot 49
         inventory.setItem(49, createIcon(Material.ARROW, Component.text("⬅ Back to Farming Menu", NamedTextColor.GRAY, TextDecoration.BOLD), List.of()));
     }
@@ -312,6 +349,22 @@ public final class FarmingGui implements InventoryHolder, Listener {
 
             FarmingGenerator gen = gui.targetGenerator;
             if (gen == null) return;
+
+            if (slot == 38) {
+                gui.farmingService.evolveGenerator(player, gen.generatorId()).thenAccept(success -> {
+                    Bukkit.getScheduler().runTask(Bukkit.getPluginManager().getPlugin("SkyRealmsFarming"), () -> {
+                        if (success) {
+                            openGeneratorDetails(player, gen, gui.farmingService);
+                        }
+                    });
+                });
+                return;
+            } else if (slot == 42) {
+                gui.farmingService.dismantleGenerator(player, gen.generatorId()).thenAccept(success -> {
+                    Bukkit.getScheduler().runTask(Bukkit.getPluginManager().getPlugin("SkyRealmsFarming"), () -> player.closeInventory());
+                });
+                return;
+            }
 
             String upgradeKey = switch (slot) {
                 case 19 -> GeneratorUpgrade.KEY_SPEED;

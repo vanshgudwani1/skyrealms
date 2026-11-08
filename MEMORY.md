@@ -111,7 +111,38 @@ Minecraft Paper 1.21.1 Runtime (Java 21 LTS)
   * `TIER_4_TROPICAL`: Sugar Cane & Cactus (Level 20 required, base XP 75)
   * `TIER_5_MYSTIC`: Nether Wart, Chorus, Glow Berries (Level 30 required, base XP 150)
 
-### B. Harvest & Automatic Regeneration Loop
+### B. Physical Structure, Custom Core & "Earth Bloom" Auto-Terraforming
+* **Custom Core Item**: Specialized Lodestone core (`FarmingCoreItemFactory`) serialized with PDC tags:
+  * `skyrealms:farming_core`: Identity byte flag.
+  * `skyrealms:core_tier`: Stored tier string (`TIER_1_WHEAT` through `TIER_5_MYSTIC`).
+  * `skyrealms:core_upgrades`: Compound tag preserving all purchased upgrade levels across dismantle and re-placement.
+* **Strict 5x5 Plane Validation**:
+  * Core placement requires a flat $5 \times 5$ plane of `DIRT` / `GRASS_BLOCK` on the player's island.
+  * If uneven, obstructed, or floating, placement is cancelled, `ENTITY_VILLAGER_NO` sound plays, and red dust particles highlight invalid block positions.
+* **Staged "Earth Bloom" Sequence (`FarmingTerraformService`)**:
+  * **Phase 1 (Tick 0)**: Beacon chime fanfare (`BLOCK_BEACON_ACTIVATE`) and cherry petal vortex (`CHERRY_LEAVES`).
+  * **Phase 2 (Tick 2)**: Sub-surface water irrigation block placed invisibly directly beneath the core at $(X_c, Y_c - 1, Z_c)$ for full 5x5 farmland hydration.
+  * **Phase 3 (Ticks 5-10)**: Concentric outward tilling ripples convert all 24 surrounding dirt blocks into fertile `FARMLAND` with hoe sounds (`ITEM_HOE_TILL`).
+  * **Phase 4 (Tick 15)**: Seeds sprout and instantly bloom to full maturity with villager happy particles (`HAPPY_VILLAGER`).
+  * **Phase 5 (Tick 22)**: DecentHologram registers above the core, fires an end rod flare, and generator enters active status.
+
+### C. DecentHolograms (DHAPI) Visual Engine & Overclocking
+* **3D Rotating Item Icon**: DecentHolograms line `#ICON: <MATERIAL>` displays an authentic spinning 3D crop icon above the core.
+* **Gradient Headers**: Hex gradient title `<#gradient:#FFB7B2:#FF69B4>` dynamically reflecting generator tier.
+* **Live Regeneration Progress Bar**: As crops regrow, hologram displays animated countdown progress bars (`⏳ REGENERATING [■■■■□□] 1.8s`).
+* **Bio-Fuel Overclocking (`OverclockManager`)**:
+  * Right-clicking the core with **Bone Meal** activates 5-minute Overclocked Mode ($2\times$ production speed).
+  * Hologram switches to animated `<#rainbow>` header with active countdown timer and spark particles.
+* **Harvest Combo Streak Engine (`HarvestComboTracker`)**:
+  * Chaining harvests within 4 seconds builds a streak multiplier up to $3.0\times$.
+  * Plays pitch-ascending musical harp notes with combo titles in action bar.
+* **Right-Click Fast Harvest**: Players can right-click fully grown crops to harvest instantly without breaking tool durability.
+* **In-Place Tier Evolution & Safe Dismantling**:
+  * Accessible directly from the 54-slot `/farm` GUI or by sneak-breaking the core.
+  * Evolving upgrades crops in-place to higher tiers when meeting level and coin requirements.
+  * Dismantling refunds the custom core item with all upgrades preserved.
+
+### D. Harvest & Automatic Regeneration Loop
 * **Maturity Check**: Only fully mature crops can be harvested (`Ageable.getAge() == Ageable.getMaximumAge()`).
 * **Concurrency Lock**: Atomic node lock ensures a crop position cannot be harvested multiple times within the same tick or during regeneration.
 * **Drop Delivery & Progression**:
@@ -238,12 +269,14 @@ CREATE TABLE IF NOT EXISTS sr_farming_mutation_discoveries (
 | `/island reset` | `/is reset` | Clear island blocks and respawn fresh starter | `skyrealms.island.reset` |
 | `/island delete` | `/is delete` | Permanently delete island and warp members to spawn | `skyrealms.island.delete` |
 | `/farm` | `/farming` | Open 54-slot Cherry Farming Menu | `skyrealms.farming.base` |
-| `/farm help` | | Display farming command guide | `skyrealms.farming.base` |
-| `/farm stats [player]` | | View farming level, XP progress, and total harvests | `skyrealms.farming.base` |
+| `/farm help` | | Display farming command guide (supports console) | `skyrealms.farming.base` |
+| `/farm core [tier]` | | Obtain custom Farming Generator Core item with PDC metadata | `skyrealms.farming.base` |
+| `/farm stats [player]` | | View farming level, XP progress, and total harvests (supports console) | `skyrealms.farming.base` |
 | `/farm generators` | | List active generators on player's island | `skyrealms.farming.base` |
 | `/farm generator info` | | Inspect generator details at targeted block | `skyrealms.farming.base` |
 | `/farm generator upgrade` | | Open upgrade purchase GUI for targeted generator | `skyrealms.farming.base` |
-| `/farm generator remove` | | Deactivate and remove targeted generator | `skyrealms.farming.base` |
+| `/farm generator remove` | | Deactivate and refund targeted generator with upgrades preserved | `skyrealms.farming.base` |
+| `/farm admin givecore <p> [t]` | | Admin command to grant generator cores to players (console supported) | `skyrealms.farming.admin` |
 | `/spawn` | `/lobby`, `/hub` | Teleport to Dragon Nest Central Dais with 3s warmup | None (Default) |
 | `/spawn paste` | | Re-paste schematic and regenerate lobby interior | `skyrealms.lobby.admin` |
 | `/warp <location>` | | Teleport to castle stations (`spawn`, `castle`, `bank`, etc.) | Essentials default |

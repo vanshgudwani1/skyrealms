@@ -43,6 +43,12 @@ public interface FarmingService {
     CompletableFuture<Boolean> removeGenerator(@NotNull UUID generatorId);
 
     @NotNull
+    CompletableFuture<Boolean> evolveGenerator(@NotNull Player player, @NotNull UUID generatorId);
+
+    @NotNull
+    CompletableFuture<Boolean> dismantleGenerator(@NotNull Player player, @NotNull UUID generatorId);
+
+    @NotNull
     CompletableFuture<FarmingUpgradeService.UpgradeResult> upgradeGenerator(
             @NotNull Player player,
             @NotNull UUID generatorId,

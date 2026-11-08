@@ -27,3 +27,7 @@ dependencies:
       load: BEFORE
       required: true
       join-classpath: true
+    DecentHolograms:
+      load: BEFORE
+      required: false
+      join-classpath: true

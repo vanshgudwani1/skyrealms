@@ -26,7 +26,7 @@ import java.util.Optional;
 import java.util.Random;
 
 /**
- * Handles the harvest, drop evaluation, anti-duplication locking, and regeneration cycle.
+ * Handles the harvest, drop evaluation, anti-duplication locking, combo streaks, and regeneration cycle.
  */
 public final class FarmingGeneratorProcessor {
 
@@ -37,6 +37,9 @@ public final class FarmingGeneratorProcessor {
     private final CropMutationEngine mutationEngine;
     private final FarmingRepository repository;
     private final EventBus eventBus;
+    private final FarmingHologramService hologramService;
+    private final OverclockManager overclockManager;
+    private final HarvestComboTracker comboTracker;
     private final Random random = new Random();
 
     public FarmingGeneratorProcessor(
@@ -44,13 +47,19 @@ public final class FarmingGeneratorProcessor {
             @NotNull FarmingProgressionService progressionService,
             @NotNull CropMutationEngine mutationEngine,
             @NotNull FarmingRepository repository,
-            @NotNull EventBus eventBus
+            @NotNull EventBus eventBus,
+            @NotNull FarmingHologramService hologramService,
+            @NotNull OverclockManager overclockManager,
+            @NotNull HarvestComboTracker comboTracker
     ) {
         this.plugin = plugin;
         this.progressionService = progressionService;
         this.mutationEngine = mutationEngine;
         this.repository = repository;
         this.eventBus = eventBus;
+        this.hologramService = hologramService;
+        this.overclockManager = overclockManager;
+        this.comboTracker = comboTracker;
     }
 
     /**
@@ -80,16 +89,24 @@ public final class FarmingGeneratorProcessor {
         int yieldUpgradeLevel = generator.getUpgradeLevel(GeneratorUpgrade.KEY_YIELD);
         int xpBoostUpgradeLevel = generator.getUpgradeLevel(GeneratorUpgrade.KEY_XP_BOOST);
 
-        // 3. Evaluate drops and yield
+        // 3. Evaluate harvest combo streak
+        double comboMult = comboTracker.registerHarvest(player);
+
+        // 4. Evaluate drops and yield
         int quantity = 1;
         if (yieldUpgradeLevel > 0 && random.nextDouble() < (yieldUpgradeLevel * 0.15)) {
-            quantity += 1; // Bonus yield
+            quantity += 1;
+        }
+        if (comboMult >= 2.0 && random.nextDouble() < 0.25) {
+            quantity += 1; // Combo bonus drop
         }
 
-        // 4. Evaluate Crop Mutation
+        // 5. Evaluate Overclock & Crop Mutation
+        boolean overclocked = overclockManager.isOverclocked(generator);
         Optional<CropMutationType> optMutation = mutationEngine.evaluateMutation(generator, random);
+
         ItemStack dropItem;
-        double xpMultiplier = 1.0 + (xpBoostUpgradeLevel * 0.20);
+        double xpMultiplier = (1.0 + (xpBoostUpgradeLevel * 0.20)) * comboMult;
 
         if (optMutation.isPresent()) {
             CropMutationType mutation = optMutation.get();
@@ -108,7 +125,6 @@ public final class FarmingGeneratorProcessor {
 
             eventBus.publishAsync(new FarmingCropMutationEvent(generator, player, tier.primaryDropMaterial(), mutation));
 
-            // Record discovery in DB
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 try {
                     repository.recordMutationDiscovery(player.getUniqueId(), mutation.name(), tier.primaryDropMaterial().name());
@@ -123,7 +139,7 @@ public final class FarmingGeneratorProcessor {
             player.playSound(loc, Sound.BLOCK_CROP_BREAK, 1.0f, 1.2f);
         }
 
-        // 5. Deliver drops safely (inventory or floor)
+        // 6. Deliver drops safely (inventory or floor)
         giveOrDrop(player, dropItem);
 
         // Also give secondary seeds for wheat if applicable
@@ -132,7 +148,7 @@ public final class FarmingGeneratorProcessor {
             giveOrDrop(player, new ItemStack(Material.WHEAT_SEEDS, seedCount));
         }
 
-        // 6. Award Progression & Farming XP
+        // 7. Award Progression & Farming XP
         long awardedXp = Math.max(1, Math.round(tier.baseFarmingXp() * xpMultiplier));
         progressionService.awardXp(player, awardedXp);
         progressionService.recordCropHarvest(player, tier.primaryDropMaterial(), quantity);
@@ -140,9 +156,10 @@ public final class FarmingGeneratorProcessor {
         generator.incrementHarvests();
         eventBus.publishAsync(new FarmingGeneratorHarvestEvent(generator, node, player, awardedXp));
 
-        // 7. Schedule Regeneration Loop
+        // 8. Schedule Regeneration Loop
         int speedUpgradeLevel = generator.getUpgradeLevel(GeneratorUpgrade.KEY_SPEED);
-        int regenDelayTicks = Math.max(5, 30 - (speedUpgradeLevel * 2));
+        int baseDelay = Math.max(6, 30 - (speedUpgradeLevel * 2));
+        int regenDelayTicks = overclocked ? Math.max(4, baseDelay / 2) : baseDelay;
 
         // Reset block to seedling
         if (data instanceof Ageable ageable) {
@@ -152,13 +169,16 @@ public final class FarmingGeneratorProcessor {
             block.setType(Material.AIR, false);
         }
 
+        // Update DecentHologram status
+        if (!overclocked) {
+            String timeSec = String.format("%.1f", regenDelayTicks / 20.0);
+            hologramService.updateStatus(generator, "&e⏳ REGENERATING &8[&a■■■■&7□□&8] &b" + timeSec + "s");
+        }
+
         scheduleRegeneration(generator, node, block, regenDelayTicks);
         return true;
     }
 
-    /**
-     * Safely schedules main thread block regeneration after delay ticks.
-     */
     private void scheduleRegeneration(
             @NotNull FarmingGenerator generator,
             @NotNull CropNode node,
@@ -167,7 +187,6 @@ public final class FarmingGeneratorProcessor {
     ) {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             try {
-                // If chunk is not loaded or block is no longer part of generator, release lock and abort
                 if (!block.getWorld().isChunkLoaded(block.getX() >> 4, block.getZ() >> 4)) {
                     node.releaseLock();
                     return;
@@ -194,22 +213,22 @@ public final class FarmingGeneratorProcessor {
                     Location loc = block.getLocation().add(0.5, 0.4, 0.5);
                     block.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, loc, 8, 0.3, 0.2, 0.3, 0.0);
                 }
+
+                // If not overclocked, restore status line to READY
+                if (!overclockManager.isOverclocked(generator)) {
+                    hologramService.updateStatus(generator, "&a● READY TO HARVEST");
+                }
             } finally {
                 node.releaseLock();
             }
         }, delayTicks);
     }
 
-    /**
-     * Handles non-player disturbance (e.g. water flushing or piston pushes).
-     * Prevents automated AFK farming without player participation.
-     */
     public void handleIllegitimateDisturbance(@NotNull FarmingGenerator generator, @NotNull CropNode node, @NotNull Block block) {
         if (!node.tryLockForHarvest()) {
             return;
         }
 
-        // Instantly replant seedling without giving drops or XP
         BlockData data = block.getBlockData();
         if (data instanceof Ageable ageable) {
             ageable.setAge(0);
@@ -218,7 +237,6 @@ public final class FarmingGeneratorProcessor {
             block.setType(Material.AIR, false);
         }
 
-        // Delayed regeneration
         scheduleRegeneration(generator, node, block, 40);
     }
 
