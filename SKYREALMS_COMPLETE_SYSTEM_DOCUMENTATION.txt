@@ -1,0 +1,526 @@
+====================================================================================================
+                        SKYREALMS — COMPLETE PLATFORM & PLUGIN MANUAL
+                   Master Technical Reference, Architecture & File Inventory
+====================================================================================================
+Repository: https://github.com/vanshgudwani1/skyrealms.git
+Target Environment: Paper 1.21.1 (Java 21 LTS)
+Build System: Gradle 8.12 (Kotlin DSL)
+Database Layer: HikariCP -> PostgreSQL (Production) / H2 (Development Fallback)
+Schema Migrations: Flyway (V1 through V6)
+Client Compatibility: 100% Vanilla Java Edition 1.21.1 (Zero client-side mods, launchers, or packs)
+====================================================================================================
+
+
+TABLE OF CONTENTS
+----------------------------------------------------------------------------------------------------
+1. System Overview & Architectural Philosophy
+2. Module Dependency Graph & Runtime Lifecycle
+3. Platform Core Modules (platform:api, common, database-api, integrations-api, testing)
+4. Plugin 1: SkyRealmsCore (Kernel, DAG Lifecycle, Dynamic Commands, ServiceRegistry)
+5. Plugin 2: SkyRealmsDatabase (HikariCP, Flyway V1-V6, Transaction Engine)
+6. Plugin 3: SkyRealmsPlayer (Profiles, Sessions, Join Caching, Settings, Stats)
+7. Plugin 4: SkyRealmsEconomy (Multi-Currency, Vault Provider, Ledger, Atomic Transactions)
+8. Plugin 5: SkyRealmsIslands (Spatial Grid, Island Lifecycle, Cooperative Roles, Void Dimension)
+9. Plugin 6: SkyRealmsFarming (Greenhouse Conservatory, Sakura Glass Garden, Crop Mastery, Quests)
+10. Database Schema & Migration Catalog (Tables V1 through V6)
+11. Commands & Permissions Matrix
+12. Build, Deployment & Automated Testing
+
+
+====================================================================================================
+1. SYSTEM OVERVIEW & ARCHITECTURAL PHILOSOPHY
+====================================================================================================
+SkyRealms is an enterprise-grade Minecraft SkyBlock server platform engineered with a modular
+monolith design pattern. Each domain (Player, Economy, Islands, Farming) is encapsulated in an
+independent, hot-deployable Paper plugin JAR while sharing contracts via platform API modules.
+
+Key Architectural Principles:
+1. Zero Vanilla Client Dependencies: The entire server experience (custom crops, interactive GUIs,
+   custom items, celestial holograms, divine cinematics, multi-currency banks, and mastery perks)
+   runs strictly on vanilla Paper 1.21.1 packets. No Forge, Fabric, NeoForge, custom launchers, or
+   mandatory resource packs are ever required.
+2. Direct Acyclic Graph (DAG) Lifecycle: Plugin modules declare strict dependencies. On boot,
+   the Core module topologically sorts and enables modules in dependency order (Database -> Player ->
+   Economy -> Islands -> Farming). On shutdown, modules disable in exact reverse dependency order.
+3. Decoupled Service Registries: Plugins expose public APIs through Bukkit's ServicesManager and
+   SkyRealms's internal ConcurrentServiceRegistry, eliminating tight coupling between plugins.
+4. Resilient Multi-Driver Database Abstraction: Seamless production connection to PostgreSQL with
+   automatic local development fallback to embedded H2 in PostgreSQL compatibility mode.
+
+
+====================================================================================================
+2. MODULE DEPENDENCY GRAPH & RUNTIME LIFECYCLE
+====================================================================================================
+
+Compilation & Runtime Graph:
+  [platform:api]
+       ^
+       |--- [platform:common]
+       |--- [platform:database-api]
+       |--- [platform:integrations-api]
+       |--- [platform:testing]
+       |
+       v
+  [SkyRealmsCore] (Classloader host & DAG Coordinator)
+       |
+       +--> [SkyRealmsDatabase] (Database & Flyway service)
+                 |
+                 +--> [SkyRealmsPlayer] (Profile persistence)
+                           |
+                           +--> [SkyRealmsEconomy] (Coins & Gems, Vault)
+                                     |
+                                     +--> [SkyRealmsIslands] (SkyBlock Islands)
+                                               |
+                                               +--> [SkyRealmsFarming] (Garden & Mastery)
+
+DAG Initialization Order:
+  1. SkyRealmsCore: Bootstraps runtime, initializes ServiceRegistry, EventBus, ModuleRegistry.
+  2. SkyRealmsDatabase: Connects HikariCP pool, validates & executes Flyway migrations (V1-V6).
+  3. SkyRealmsPlayer: Hooks connection listeners, activates profile caching.
+  4. SkyRealmsEconomy: Registers Vault economy provider, loads active currencies.
+  5. SkyRealmsIslands: Creates void world 'skyrealms_islands', populates spatial allocation grid.
+  6. SkyRealmsFarming: Creates void world 'skyrealms_garden', auto-heals plots, loads active gardens.
+
+
+====================================================================================================
+3. PLATFORM CORE MODULES
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+A. platform:api (C:\servermc\skyrealms\platform\api\)
+   Shared interfaces, event bus contracts, and module lifecycle abstractions.
+----------------------------------------------------------------------------------------------------
+- event/SkyEvent.java: Base marker interface for all internal domain events.
+- event/CancellableEvent.java: Interface for events that can be interrupted or cancelled.
+- event/EventBus.java: Central decoupled publish-subscribe contract.
+- event/EventListener.java: Functional consumer interface for event handlers.
+- event/EventPriority.java: LOWEST, LOW, NORMAL, HIGH, HIGHEST, MONITOR.
+- event/EventSubscription.java: Subscription token for lifecycle unsubscribe.
+- module/SkyModule.java: Core module contract declaring id, dependencies, enable, and disable.
+- module/ModuleId.java: Strongly-typed record identifying modules.
+- module/ModuleContext.java: Injected context giving modules access to EventBus and ServiceRegistry.
+- module/ModuleMetadata.java: Versioning and author metadata.
+- module/ModuleState.java: UNLOADED, LOADED, ENABLING, ENABLED, DISABLING, DISABLED, FAILED.
+- module/ModuleRegistry.java: Registry storing and looking up modules.
+- module/ModuleLifecycleManager.java: Contract for enabling/disabling module DAGs.
+- service/ServiceRegistry.java: Decoupled service locator for cross-plugin API retrieval.
+
+----------------------------------------------------------------------------------------------------
+B. platform:common (C:\servermc\skyrealms\platform\common\)
+   Authoritative implementations of the core platform abstractions.
+----------------------------------------------------------------------------------------------------
+- command/DynamicCommandRegistrar.java: Dynamic runtime Bukkit command injector (bypasses plugin.yml).
+- event/DefaultEventBus.java: Thread-safe, priority-sorted event dispatcher.
+- module/DefaultModuleContext.java: Standard implementation of ModuleContext.
+- module/DefaultModuleRegistry.java: Thread-safe ConcurrentHashMap module registry.
+- module/DefaultModuleLifecycleManager.java: Executes DAG topological sorts, enables and disables modules.
+- module/DirectedGraphDependencyResolver.java: Depth-First Search (DFS) topological sorter.
+- module/DependencyResolver.java: Interface for dependency graph resolvers.
+- module/CyclicDependencyException.java: Thrown when circular dependencies are detected.
+- module/MissingDependencyException.java: Thrown when a declared dependency is not registered.
+- service/ConcurrentServiceRegistry.java: Thread-safe, type-safe service repository.
+
+----------------------------------------------------------------------------------------------------
+C. platform:database-api (C:\servermc\skyrealms\platform\database-api\)
+   Database connection pooling, query execution, and transactional contracts.
+----------------------------------------------------------------------------------------------------
+- DatabaseService.java: Authoritative interface for obtaining connections and running transactions.
+- TransactionCallback.java: Functional transaction callback returning a result.
+- VoidTransactionCallback.java: Functional transaction callback with no return value.
+
+----------------------------------------------------------------------------------------------------
+D. platform:integrations-api (C:\servermc\skyrealms\platform\integrations-api\)
+   Third-party integration hooks and provider interfaces.
+----------------------------------------------------------------------------------------------------
+- EconomyProvider.java: Standardized economy bridge contract (compatible with Vault).
+- PermissionsProvider.java: Standardized permissions provider bridge (compatible with LuckPerms).
+
+----------------------------------------------------------------------------------------------------
+E. platform:testing (C:\servermc\skyrealms\platform\testing\)
+   Mocking infrastructure, dummy modules, and test harness tools for JUnit 5 tests.
+----------------------------------------------------------------------------------------------------
+- DummyTestModule.java: Configurable test module for testing DAG lifecycle and failure recovery.
+- TestModuleContext.java: In-memory ModuleContext fixture for isolated unit tests.
+
+
+====================================================================================================
+4. PLUGIN 1: SkyRealmsCore
+====================================================================================================
+Directory: C:\servermc\skyrealms\plugins\SkyRealmsCore\
+JAR Output: SkyRealmsCore-1.0.0.jar
+Package: com.skyrealms.core
+
+Role:
+The primary runtime engine and platform classloader host. It initializes the shared platform classes,
+coordinates the DAG lifecycle, boots all modules on server startup, and safely shuts them down on stop.
+
+Key Files:
+1. SkyRealmsCorePlugin.java:
+   - Extends JavaPlugin.
+   - Instantiates DefaultEventBus, ConcurrentServiceRegistry, and DefaultModuleRegistry.
+   - Listens for server load completion to trigger ModuleLifecycleManager.enableAll().
+   - Shuts down active modules in reverse order on onDisable().
+2. module/CoreModule.java:
+   - Core SkyModule implementation representing the SkyRealms platform kernel.
+   - Registers core services and exposes the base system status.
+3. command/SkyRealmsCommand.java:
+   - Primary administrative command: /skyrealms (aliases: /sr).
+   - Subcommands: /sr status, /sr reload, /sr modules, /sr dump.
+
+
+====================================================================================================
+5. PLUGIN 2: SkyRealmsDatabase
+====================================================================================================
+Directory: C:\servermc\skyrealms\plugins\SkyRealmsDatabase\
+JAR Output: SkyRealmsDatabase-1.0.0.jar
+Package: com.skyrealms.database
+
+Role:
+High-performance database connectivity layer backed by HikariCP. Manages automatic failover between
+PostgreSQL and embedded H2, and executes versioned Flyway database migrations (V1 to V6).
+
+Key Files:
+1. SkyRealmsDatabasePlugin.java:
+   - Extends JavaPlugin. Registers the "database" module with SkyRealmsCore.
+2. module/DatabaseModule.java:
+   - Implements SkyModule.
+   - Attempts initial connection to PostgreSQL at 127.0.0.1:5432.
+   - If unreachable, gracefully falls back to local embedded H2 in PostgreSQL compatibility mode:
+     jdbc:h2:C:/servermc/plugins/SkyRealmsCore/modules/database/skyrealms_dev;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+   - Runs Flyway migrations from classpath:db/migration.
+   - Registers DatabaseService in Bukkit ServicesManager.
+3. HikariDatabaseService.java:
+   - Implementation of DatabaseService using HikariDataSource.
+   - Provides getConnection(), executeTransaction(callback), executeTransactionVoid(action).
+4. migration/DatabaseMigrationService.java:
+   - Encapsulates Flyway configuration, baseline, validation, and migration execution.
+
+
+====================================================================================================
+6. PLUGIN 3: SkyRealmsPlayer
+====================================================================================================
+Directory: C:\servermc\skyrealms\plugins\SkyRealmsPlayer\
+JAR Output: SkyRealmsPlayer-1.0.0.jar
+Package: com.skyrealms.player
+
+Role:
+Manages persistent player identity, preloaded profiles, active session tracking, personal settings,
+and gameplay statistics.
+
+Key Files:
+1. SkyRealmsPlayerPlugin.java:
+   - Extends JavaPlugin. Registers "player" module.
+2. module/PlayerModule.java:
+   - Depends on: "database".
+   - Registers PlayerService, hooks PlayerConnectionListener into Bukkit.
+3. repository/PlayerRepository.java:
+   - SQL Data Access Object for sr_players and sr_player_sessions.
+   - Methods: findById, findByUsername, saveProfile, recordSessionStart, recordSessionEnd.
+4. service/PlayerService.java:
+   - High-speed ConcurrentHashMap memory cache for online players.
+   - Preloads profiles on AsyncPlayerPreLoginEvent to guarantee zero main-thread database hitches.
+5. listener/PlayerConnectionListener.java:
+   - Preloads profile on AsyncPlayerPreLoginEvent.
+   - Creates new profile on first join.
+   - Flushes player statistics and closes session on PlayerQuitEvent.
+6. command/ProfileCommand.java:
+   - /profile command displaying player stats, first join date, island status, and balance.
+7. Models:
+   - PlayerProfile.java: Immutable profile record (UUID, username, firstJoined, lastSeen).
+   - PlayerSession.java: Active session record with login timestamp and IP address.
+   - PlayerSettings.java: Player preferences (teleport confirmations, chat toggles, notifications).
+   - PlayerStats.java: Tracked statistics (playtime, blocks broken, mob kills).
+
+
+====================================================================================================
+7. PLUGIN 4: SkyRealmsEconomy
+====================================================================================================
+Directory: C:\servermc\skyrealms\plugins\SkyRealmsEconomy\
+JAR Output: SkyRealmsEconomy-1.0.0.jar
+Package: com.skyrealms.economy
+
+Role:
+Multi-currency transactional banking engine. Supports Coins (primary trading currency) and Gems
+(premium currency). Hooks seamlessly into Vault for 100% compatibility with third-party plugins.
+
+Key Files:
+1. SkyRealmsEconomyPlugin.java:
+   - Extends JavaPlugin. Registers "economy" module.
+2. module/EconomyModule.java:
+   - Depends on: "database", "player".
+   - Registers EconomyService, binds VaultEconomyProvider to Bukkit ServicesManager.
+3. repository/EconomyRepository.java:
+   - Handles sr_currencies, sr_balances, and sr_transactions tables.
+   - Atomically updates balances and appends immutable audit ledger rows.
+4. service/EconomyService.java:
+   - Core transactional banking methods:
+     * getBalance(playerId, currency): Checks balance with memory cache.
+     * deposit(playerId, currency, amount, reason, transactionId): Atomic balance increment.
+     * withdraw(playerId, currency, amount, reason, transactionId): Atomic balance decrement.
+     * transfer(senderId, recipientId, currency, amount, reason): Atomic two-party transaction.
+5. service/VaultEconomyProvider.java:
+   - Implements net.milkbowl.vault.economy.Economy.
+   - Exposes SkyRealms Coins directly to any Vault-enabled plugin (ChestShop, QuickShop, etc.).
+6. Commands:
+   - command/BalanceCommand.java: /balance (/bal) displaying current Coins and Gems.
+   - command/PayCommand.java: /pay <player> <amount> transferring Coins with safety confirmation.
+   - command/EcoCommand.java: /eco <give|take|set|reset> <player> <currency> <amount> (admin).
+7. event/TransactionCompletedEvent.java:
+   - Published via EventBus whenever any deposit, withdrawal, or transfer completes.
+
+
+====================================================================================================
+8. PLUGIN 5: SkyRealmsIslands
+====================================================================================================
+Directory: C:\servermc\skyrealms\plugins\SkyRealmsIslands\
+JAR Output: SkyRealmsIslands-1.0.0.jar
+Package: com.skyrealms.islands
+
+Role:
+Comprehensive SkyBlock island management system. Features deterministic 2D grid allocation, procedural
+starter island generation, cooperative island roles and permissions, border protection, and celestial
+holographic displays.
+
+Key Files:
+1. SkyRealmsIslandsPlugin.java:
+   - Extends JavaPlugin. Registers "islands" module.
+2. module/IslandsModule.java:
+   - Depends on: "database", "player", "economy".
+   - Creates dedicated void world 'skyrealms_islands'.
+   - Registers IslandService and IslandProtectionService.
+3. service/IslandManager.java & IslandService.java:
+   - Creates islands, invites members, manages ranks (OWNER, CO_OWNER, MODERATOR, MEMBER, VISITOR).
+   - Teleports players to island home spawns with warmup timers.
+   - Manages upgrades (Island size, generator limits, member limits).
+4. world/SpatialGridAllocator.java:
+   - Deterministic 2D square spiral allocator placing islands 500 blocks apart.
+   - Translates region index into non-overlapping world coordinates.
+5. world/StarterIslandGenerator.java:
+   - Procedurally generates classic SkyBlock starter islands (dirt, bedrock anchor, oak tree,
+     and starter chest with ice and lava bucket).
+6. world/VoidChunkGenerator.java & VoidBiomeProvider.java:
+   - Generates empty air chunks in 'skyrealms_islands' with THE_VOID biome.
+7. protection/IslandProtectionService.java:
+   - High-speed spatial boundary listener.
+   - Prevents non-members from breaking blocks, placing blocks, opening chests, or PVPing.
+8. gui/IslandGui.java:
+   - 54-slot chest GUI for managing island upgrades, member settings, permissions, and warps.
+9. lobby/HologramService.java:
+   - Spawns modern Minecraft TextDisplay entity holograms at server spawn and islands.
+10. command/IslandCommand.java:
+    - /is, /island [create|home|teleport|invite|kick|promote|demote|settings|upgrade|delete|help].
+
+
+====================================================================================================
+9. PLUGIN 6: SkyRealmsFarming
+====================================================================================================
+Directory: C:\servermc\skyrealms\plugins\SkyRealmsFarming\
+JAR Output: SkyRealmsFarming-1.0.0.jar
+Package: com.skyrealms.farming
+
+Role:
+The complete agricultural foundation and progression engine. Successfully retires legacy 5x5 Farming
+Generators and delivers the "Sakura Glass Garden" botanical conservatory, the Divine Offering ritual,
+Allay emissary cinematics, Elarion the Botanist, First Harvest quests, and 10-crop Crop Mastery.
+
+Key Files:
+
+--- Module & Lifecycle ---
+1. module/FarmingModule.java:
+   - Connects to DAG: depends on "database", "player", "economy", "islands".
+   - Binds services: GardenService, OfferingService, FarmingQuestService, CropMasteryService.
+   - Registers all 7 listeners and dynamic commands /garden and /farm.
+
+--- Commands ---
+2. command/GardenCommand.java:
+   - Player Commands: /garden home, /garden leave, /garden info, /garden plots, /garden mastery,
+     /garden quest, /garden help.
+   - Admin Commands (/garden admin):
+     * /garden admin tp <player>: Teleport directly to player's garden conservatory.
+     * /garden admin reset <player>: Completely wipes offering submission, locks garden access,
+       resets Elarion intro, deletes quest progress, teleports player back to island. Allows
+       re-testing or re-playing the divine offering ritual.
+     * /garden admin unlockplot <player> <1-16>: Unlocks individual 4x4 chunk plot.
+     * /garden admin giveitem <player> <hay|carrot|cane|hoe|seeds|bonemeal> [amount]: Gives authentic
+       ritual items or starter materials.
+3. command/FarmCommand.java:
+   - Informative command notifying players that legacy generators are retired in favor of /garden.
+
+--- Conservatory Models & Architecture ---
+4. garden/Garden.java:
+   - Domain model for island's greenhouse dome. Bounding box, center coordinates (Y=100), region size.
+5. garden/GardenPlot.java:
+   - Model representing one of the 16 agricultural plots (2 rows of 8).
+   - Footprint: 4x4 chunks (64x64 blocks = 4,096 blocks per plot).
+   - Overall farming footprint: 512x128 blocks across the conservatory.
+6. garden/GardenSpatialAllocator.java:
+   - Deterministic 2D spiral allocator mapping island gardens with 1024-block spacing.
+7. garden/GardenWorldManager.java:
+   - Manages dedicated void world 'skyrealms_garden'.
+8. garden/GardenDomeGenerator.java:
+   - Procedural builder for "Project: Sakura Glass Garden":
+     * Unified 520x168 block greenhouse envelope with curved glass canopy.
+     * Grand Central Promenade (32 blocks wide) with Torii arches and dark oak walkways.
+     * Central Japanese Garden: Koi pond, moon bridge, tea house, natural waterfall, zen rock garden.
+     * 16 4x4 chunk agricultural plots with 100% moisture irrigation grid (sea lanterns + water + slabs).
+     * Starter Plot 1 pre-seeded with mature golden wheat.
+     * 12 massive custom Sakura blossom trees with cherry leaves and fallen petal carpets.
+9. garden/DefaultGardenService.java:
+   - Core garden management, spatial lookup, and teleportation.
+   - Auto-Healing: If an island's garden exists in sr_gardens but sr_garden_plots has 0 rows, it
+     automatically creates and persists all 16 plots on demand with Plot 1 unlocked!
+
+--- Natural Farming Engine ---
+10. garden/NaturalFarmingEngine.java:
+    - Ageable crop maturity validation (isMature).
+    - If crop is immature, sends real-time action bar: "⚠ This crop is not fully grown yet!"
+    - Instant right-click fast harvest with automatic replanting and inventory deposit.
+    - Manual break harvest with event dispatching.
+    - Anti-exploit: fast bit-packed block tracking preventing placed-block XP exploits.
+11. garden/NaturalFarmingListener.java:
+    - Bukkit listener for crop clicking, breaking, planting, and growth acceleration.
+12. garden/GardenProtectionListener.java:
+    - Protects conservatory glass, timber, Torii gates, and tea house architecture from damage.
+    - Restricts crop harvesting to unlocked plots (or fallback within the island garden).
+
+--- Divine Offering & Cinematic Workflow ---
+13. garden/item/GardenItemFactory.java:
+    - Creates persistent custom items using PersistentDataContainer:
+      * Enchanted Hay Bale ("enchanted_hay_bale")
+      * Enchanted Carrot ("enchanted_carrot")
+      * Enchanted Sugar Cane ("enchanted_sugar_cane")
+      * Novice Hoe ("novice_hoe")
+14. garden/offering/DefaultOfferingService.java & OfferingService.java:
+    - Validates chest contents (3 Hay Bales, 3 Carrots, 3 Sugar Cane).
+    - Mutex lock preventing concurrent submissions on the same island.
+    - Atomically consumes items and launches DivineCinematicService.
+    - resetOfferingAndUnlock: Wipes database records and clears cache for admin resets.
+15. garden/offering/OfferingListener.java:
+    - Intercepts chests renamed "Offering to the Gods" on player islands.
+16. garden/cinematic/DivineCinematicService.java:
+    - 6-second vanilla-safe cinematic: lightning strike, holy totem particles, glowing Allay Divine
+      Emissary descending and ascending in a spiral of cherry blossom petals, divine blessing titles,
+      and permanent Garden unlock broadcast to online co-op members.
+
+--- Elarion Introduction & Quests ---
+17. garden/intro/ElarionService.java & ElarionListener.java:
+    - Greets player on first entry into 'skyrealms_garden'.
+    - Delivers starter gear: Novice Hoe, 16 Wheat Seeds, 8 Bone Meal.
+    - Starts First Harvest quest and displays tutorial chat dialogue.
+18. garden/quest/DefaultFarmingQuestService.java & FarmingQuestListener.java:
+    - Tracks "first_harvest" quest: 16 Farmland tilled, 16 Seeds planted, 16 Wheat harvested.
+    - Rewards: +500 Farming XP, +2,500 Coins, +16 Carrots, challenge toast fanfare.
+    - resetQuest: Clears quest progress from database and memory for resets.
+
+--- Crop Mastery System ---
+19. garden/mastery/CropType.java:
+    - Enum for all 10 crops: Wheat, Carrots, Potatoes, Beetroots, Melon, Pumpkin, Sugar Cane,
+      Cactus, Cocoa, Nether Wart.
+20. garden/mastery/CropMastery.java:
+    - Tracks player XP across 30 levels per crop. Formula: floor(50 * level^2.1).
+21. garden/mastery/MasteryMilestone.java:
+    - 7 milestones per crop at levels 1, 5, 10, 15, 20, 25, 30.
+    - Cumulative double-drop chances, active potion buffs, and economy coin grants.
+22. garden/mastery/DefaultCropMasteryService.java & CropMasteryService.java:
+    - Awards mastery XP, handles level-ups, milestone claims, and async SQL persistence.
+23. garden/mastery/CropMasteryListener.java:
+    - Listens to GardenCropHarvestEvent. Awards mastery XP, evaluates double-drop rolls,
+      applies active potion effects, and sends authoritative action bar notifications:
+      "+10 Farming XP | +10 Wheat Mastery [Lvl 1 - 50%] [DOUBLE DROP!]"
+24. garden/mastery/CropMasteryGui.java:
+    - Multi-page 54-slot chest GUI with custom InventoryHolders (CropOverviewHolder, CropDetailHolder).
+
+--- Legacy Retirement ---
+25. legacy/LegacyGeneratorRetirementListener.java:
+    - Intercepts placement of old 5x5 generator cores, cancels placement, refunds coins via
+      EconomyService, and guides players to /garden.
+
+
+====================================================================================================
+10. DATABASE SCHEMA & MIGRATION CATALOG
+====================================================================================================
+Flyway manages all database migrations in plugins/SkyRealmsDatabase/src/main/resources/db/migration/
+
+V1__create_player_tables.sql:
+  - sr_players (id UUID PK, username VARCHAR(16), first_joined TIMESTAMP, last_seen TIMESTAMP)
+  - sr_player_sessions (session_id UUID PK, player_id UUID FK, ip_address VARCHAR(45), ...)
+
+V2__create_economy_tables.sql:
+  - sr_currencies (currency_id VARCHAR(32) PK, display_name, symbol, is_default, decimals)
+  - sr_balances (player_id UUID, currency_id VARCHAR(32), balance NUMERIC(38,2), PK (player_id, currency_id))
+  - sr_transactions (transaction_id UUID PK, sender_id, recipient_id, currency_id, amount, reason, ...)
+
+V3__create_island_tables.sql:
+  - sr_islands (island_id UUID PK, owner_uuid UUID, world_name, center_x, center_y, center_z, ...)
+  - sr_island_members (island_id UUID, player_uuid UUID, role VARCHAR(32), permissions, PK (island_id, player_uuid))
+  - sr_island_upgrades (island_id UUID, upgrade_type VARCHAR(64), level INTEGER, PK (island_id, upgrade_type))
+
+V4__create_farming_tables.sql:
+  - sr_farming_progress (player_uuid UUID PK, farming_level INT, farming_xp BIGINT, ...)
+  - sr_crop_collections (player_uuid UUID, crop_id VARCHAR(32), amount_collected BIGINT, PK (player_uuid, crop_id))
+  - sr_farming_generators (generator_id UUID PK, island_id UUID, tier VARCHAR(32), ...) [LEGACY/RETIRED]
+
+V5__create_garden_tables.sql:
+  - sr_gardens (garden_id UUID PK, island_id UUID UNIQUE FK, region_index INT UNIQUE, center_x, center_z, ...)
+  - sr_garden_plots (island_id UUID FK, plot_index INT (1-16), unlocked BOOLEAN, crop_type, PK (island_id, plot_index))
+  - sr_garden_unlocks (island_id UUID PK FK, offering_completed BOOLEAN, cinematic_completed BOOLEAN, unlocked_at)
+  - sr_crop_mastery (player_uuid UUID FK, crop_type VARCHAR(32), mastery_xp BIGINT, mastery_level INT, PK (player_uuid, crop_type))
+  - sr_player_research (player_uuid UUID PK FK, research_points BIGINT, unlocked_branches VARCHAR(512), ...)
+
+V6__create_garden_quests_and_milestones.sql:
+  - sr_garden_offerings (island_id UUID PK FK, submitted_by UUID FK, hay_bales_count, carrots_count, sugar_cane_count, status, submitted_at)
+  - sr_farming_quests (player_uuid UUID FK, quest_id VARCHAR(64), status, tilled_count, planted_count, harvested_count, claimed_rewards, PK (player_uuid, quest_id))
+  - ALTER sr_crop_mastery ADD COLUMN claimed_milestones VARCHAR(256) DEFAULT ''
+  - ALTER sr_player_research ADD COLUMN elarion_intro_completed BOOLEAN DEFAULT FALSE
+
+
+====================================================================================================
+11. COMMANDS & PERMISSIONS MATRIX
+====================================================================================================
+
+Command               Permission                     Description
+----------------------------------------------------------------------------------------------------
+/garden               skyrealms.garden.base          Teleports to Greenhouse Conservatory (/garden home)
+/garden home          skyrealms.garden.base          Teleports to Greenhouse (validates offering unlock)
+/garden leave         skyrealms.garden.base          Teleports from Garden back to Island Home
+/garden info          skyrealms.garden.base          Displays Garden world coordinates & region bounds
+/garden plots         skyrealms.garden.base          Views unlocked/locked status of all 16 plots
+/garden mastery       skyrealms.garden.base          Opens 10-crop Mastery GUI (alias: /garden skills)
+/garden quest         skyrealms.garden.base          Views First Harvest quest objectives and progress
+/garden help          skyrealms.garden.base          Displays Garden command guide
+/garden admin tp      skyrealms.garden.admin (OP)    Teleports admin to target player's Garden
+/garden admin reset   skyrealms.garden.admin (OP)    Resets player's offering, unlock, intro, & quests
+/garden admin unlock  skyrealms.garden.admin (OP)    Unlocks a specific plot (1-16) for player's island
+/garden admin give    skyrealms.garden.admin (OP)    Gives custom items (hay, carrot, cane, hoe, seeds, bonemeal)
+/is, /island          skyrealms.islands.base         Core SkyBlock island management command suite
+/balance, /bal        skyrealms.economy.balance      Views player's Coins and Gems balances
+/pay <player> <amt>   skyrealms.economy.pay          Transfers Coins to another player safely
+/profile              skyrealms.player.profile       Views player profile, first join, and statistics
+/skyrealms status     skyrealms.admin (OP)           Displays runtime DAG module states and health
+
+
+====================================================================================================
+12. BUILD, DEPLOYMENT & AUTOMATED TESTING
+====================================================================================================
+
+Build Command:
+  $env:JAVA_HOME = "C:\servermc\jdk-21"; $env:PATH = "C:\servermc\jdk-21\bin;$env:PATH"; .\gradlew build
+
+Execute All Unit Tests:
+  $env:JAVA_HOME = "C:\servermc\jdk-21"; $env:PATH = "C:\servermc\jdk-21\bin;$env:PATH"; .\gradlew test
+
+Automated Test Coverage (65+ Passing Unit Tests):
+  - DirectedGraphDependencyResolverTest: Topological sorting & cycle detection.
+  - DefaultEventBusTest: Priority dispatching and cancellation.
+  - FlywayMigrationTest: Validates schema migrations V1 through V6 against in-memory H2.
+  - HikariDatabaseServiceTest: Connection pool health, commit, rollback transactions.
+  - PlayerRepositoryTest & PlayerServiceTest: Profile caching and prelogin persistence.
+  - EconomyRepositoryTest & EconomyServiceTest: Multi-currency balance arithmetic and transfers.
+  - IslandModelTest & IslandRepositoryTest: Spatial index collision avoidance, membership roles.
+  - GardenSpatialAllocatorTest: Mathematical verification of 2D spiral slots, 1024 spacing, 768 size.
+  - GardenPlotTest: 4x4 chunk bounds (64x64 blocks), North/South rows, non-overlapping verification.
+  - NaturalFarmingEngineTest: Ageable crop maturity checks, anti-exploit tracking, canonical IDs.
+  - CropMasteryTest: Power curve level calculations, 7 milestones, milestone bitmask encoding/decoding.
+  - GardenOfferingAndQuestRepositoryTest: Offering submissions, unlock states, quest progress persistence,
+    Elarion intro completion, and reset deletions.
+====================================================================================================

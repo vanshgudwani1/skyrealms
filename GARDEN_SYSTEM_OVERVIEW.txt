@@ -1,0 +1,592 @@
+================================================================================
+                    SKYREALMS GARDEN SYSTEM — FULL TECHNICAL MANUAL
+                    Complete Architecture, Codebase Inventory & Mechanics
+================================================================================
+Target Environment: Paper 1.21.1 (Java 21 LTS)
+Plugin: SkyRealmsFarming (v1.0.0) | Module: com.skyrealms.farming
+Database: Flyway-managed PostgreSQL (Production) / H2 (Development fallback)
+Client Compatibility: 100% Vanilla Java Minecraft 1.21.1 (Zero client mods/packs)
+================================================================================
+
+
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+The SkyRealms Garden System is an expansive, progression-driven farming overhaul
+designed to replace the legacy physical 5x5 "Farming Generator" mechanic with an
+organic, immersive agricultural conservatory called the "Sakura Glass Garden".
+
+Key gameplay pillars:
+1. Divine Offering Ritual: Players craft 3 Enchanted Hay Bales, 3 Enchanted Carrots,
+   and 3 Enchanted Sugar Cane, placing them into a renamed chest ("Offering to the Gods")
+   on their island. This triggers an in-world cinematic featuring an Allay divine emissary
+   and permanently unlocks island Garden access.
+2. Sakura Glass Garden Conservatory: A unified 520x168 block Japanese botanical
+   greenhouse generated inside a dedicated void dimension ("skyrealms_garden"). Features
+   curved transparent glass silhouettes, Torii gatehouses, cherry blossom trees,
+   a central Japanese garden with koi pond and moon bridge, tea house, waterfall, and
+   16 individual 4x4 chunk (64x64 block) crop plots.
+3. Elarion Botanical Guide & First Harvest Quest: On first entry, Elarion greets the
+   player, presents starter supplies (Novice Hoe, 16 Wheat Seeds, 8 Bone Meal), and
+   initiates the First Harvest quest (Prepare 16 Farmland, Plant 16 Seeds, Harvest 16 Wheat).
+4. Natural Farming Engine: Instant right-click fast harvesting with auto-replant,
+   vanilla left-click break harvesting with maturity verification, anti-exploit
+   player-placed block tracking, and real-time action bar progress.
+5. Crop Mastery System: 10 individual crops, each with 30 mastery levels following a
+   power curve (Math.floor(50 * level^2.1)), 7 claimed milestones per crop awarding
+   permanent double-drop chances, active potion buffs, rare drops, and economy coin rewards.
+6. Full Administration & Auto-Healing: Administrative controls (/garden admin reset <player>,
+   tp, unlockplot, giveitem) and automatic database self-healing for missing plots.
+
+
+================================================================================
+2. PLATFORM ARCHITECTURE & MODULE RELATIONSHIPS
+================================================================================
+SkyRealms follows a modular Direct Acyclic Graph (DAG) architecture managed by
+SkyRealmsCore. Plugins register as modules and expose public API services via Bukkit's
+ServicesManager and custom ServiceRegistries.
+
+Module Dependency Chain:
+  [platform:api]               -> Shared interfaces, events, and utilities
+        |
+  [platform:common]            -> Base implementations, math, spatial algorithms
+        |
+  [platform:database-api]      -> Database pooling & transaction abstractions
+        |
+  [plugins:SkyRealmsDatabase]  -> HikariCP pool, PostgreSQL / H2 driver, Flyway migrations
+        |
+  [plugins:SkyRealmsPlayer]    -> Profile persistence, sessions, join listeners
+        |
+  [plugins:SkyRealmsEconomy]   -> Multi-currency engine (Coins, Gems), Vault hook
+        |
+  [plugins:SkyRealmsIslands]   -> SkyBlock islands, permissions, island spatial grid
+        |
+  [plugins:SkyRealmsFarming]   -> Garden system, natural farming engine, crop mastery
+
+
+================================================================================
+3. COMPLETE FILE-BY-FILE CODEBASE INVENTORY
+================================================================================
+
+All files are located under:
+C:\servermc\skyrealms\plugins\SkyRealmsFarming\src\main\java\com\skyrealms\farming\
+
+--------------------------------------------------------------------------------
+A. TOP-LEVEL MODULE & LIFECYCLE
+--------------------------------------------------------------------------------
+
+1. module/FarmingModule.java
+   - Role: Main entry point and DAG lifecycle coordinator for SkyRealmsFarming.
+   - Responsibilities:
+     * Registers dependencies: "database", "player", "economy", "islands".
+     * Instantiates FarmingRepository, GardenWorldManager, GardenSpatialAllocator,
+       DefaultGardenService, DefaultOfferingService, DefaultCropMasteryService,
+       DefaultFarmingQuestService, ElarionService, DivineCinematicService.
+     * Registers public services into Bukkit ServicesManager with ServicePriority.High.
+     * Subscribes and registers all Bukkit event listeners (NaturalFarmingListener,
+       GardenProtectionListener, OfferingListener, FarmingQuestListener, ElarionListener,
+       CropMasteryListener, LegacyGeneratorRetirementListener).
+     * Registers commands (/garden, /farm) via DynamicCommandRegistrar.
+
+--------------------------------------------------------------------------------
+B. COMMAND SUITE
+--------------------------------------------------------------------------------
+
+2. command/GardenCommand.java
+   - Role: User-facing and administrative command suite (/garden, /g).
+   - Subcommands:
+     * /garden home (or /garden): Teleports player to their island's Greenhouse Garden.
+       Validates island membership and checks divine offering unlock status.
+     * /garden leave: Teleports player from Garden back to their Island Home spawn.
+     * /garden info: Displays Garden world coordinates, region bounds, and active status.
+     * /garden plots: Displays unlocked/locked status and crop assignments for all 16 plots.
+     * /garden mastery (or /garden skills): Opens the 54-slot interactive Crop Mastery GUI.
+     * /garden quest (or /garden quests): Displays current First Harvest quest objectives.
+     * /garden help: Clean, vanilla-safe formatted guide of all subcommands.
+   - Admin Subcommands (/garden admin [permission: skyrealms.garden.admin]):
+     * /garden admin tp <player>: Teleports admin to target player's Garden.
+     * /garden admin reset <player>: Completely resets an island and player's Garden state:
+       - Deletes offering records from sr_garden_offerings.
+       - Locks garden access in sr_garden_unlocks.
+       - Resets Elarion introduction in sr_player_research.
+       - Deletes First Harvest quest progress in sr_farming_quests.
+       - Teleports online target player out of skyrealms_garden back to their island.
+       - Clears all in-memory caches, requiring the Divine Offering ritual to be performed again.
+     * /garden admin unlockplot <player> <1-16>: Manually unlocks a specific plot.
+     * /garden admin giveitem <player> <hay|carrot|cane|hoe|seeds|bonemeal> [amount]:
+       Gives custom ritual items, tools, or farming supplies directly to a player.
+   - Tab Completer: Full context-sensitive tab completion for subcommands, players, and items.
+
+3. command/FarmCommand.java
+   - Role: Legacy /farm command repurposed for retirement notifications.
+   - Explains that physical Farming Generators are retired in favor of /garden.
+
+--------------------------------------------------------------------------------
+C. DOMAIN MODELS & SPATIAL ENGINE
+--------------------------------------------------------------------------------
+
+4. garden/Garden.java
+   - Role: Immutable domain model representing an island's Greenhouse Garden region.
+   - Fields:
+     * gardenId (UUID): Primary key.
+     * islandId (UUID): Owning island reference.
+     * regionIndex (int): Deterministic spiral grid slot.
+     * worldName (String): "skyrealms_garden".
+     * centerX, centerY, centerZ (int): Geometric center coordinates (Y=100).
+     * size (int): Bounding box footprint (default 768 blocks).
+     * unlocked (boolean): Unlock status.
+   - Key Methods:
+     * minX(), maxX(), minZ(), maxZ(): Bounding box extents.
+     * isInRegion(Location loc): Fast collision check against garden boundary.
+     * getCenterLocation(): Center Bukkit Location.
+     * getWestGateSpawnLocation(): Entrance arrival spawn facing down the Sakura promenade.
+
+5. garden/GardenPlot.java
+   - Role: Model representing one of the 16 agricultural plots inside a Garden.
+   - Layout:
+     * 2 rows of 8 columns.
+     * Footprint: 4x4 chunks (64x64 blocks = 4,096 blocks per plot).
+     * Overall farming footprint: 512x128 blocks across the conservatory.
+     * North row (plots 1 to 8): Z offset -48 blocks.
+     * South row (plots 9 to 16): Z offset +48 blocks.
+     * Grand Central Boulevard spans Z [-16, +15] (32 blocks wide, 2 chunks).
+     * Column X offsets: {-224, -160, -96, -32, 32, 96, 160, 224}.
+   - Key Methods:
+     * contains(gardenCenterX, gardenCenterZ, bx, bz): Boundary check for plot interior.
+     * getCenterX(), getCenterZ(), getMinX(), getMaxX(), getMinZ(), getMaxZ().
+     * getCenterLocation(Garden garden): Center spawn location inside the plot.
+
+6. garden/GardenSpatialAllocator.java
+   - Role: Deterministic 2D square spiral coordinate allocator for Garden regions.
+   - Constants: DEFAULT_SPACING = 1024, DEFAULT_REGION_SIZE = 768.
+   - Ensures zero overlap between islands, providing 256-block buffer safety zones.
+   - Methods:
+     * indexToGrid(int n): Maps sequential index (0, 1, 2, ...) to 2D spiral (x, z).
+     * getGardenCenter(int n): Returns world coordinates (x * 1024, z * 1024).
+     * getRegionBounds(int n): Bounding box record for region n.
+     * getNearestGridAnchor(blockX, blockZ): Reverses world coordinates to the nearest anchor.
+
+7. garden/GardenWorldManager.java
+   - Role: Dedicated void world manager for "skyrealms_garden".
+   - Ensures the dimension is generated with VoidWorldGenerator (Environment.NORMAL),
+     disabling vanilla mob spawns, weather disturbances, and setting noon time lock.
+
+8. garden/GardenDomeGenerator.java
+   - Role: Architectural procedural builder for Project: Sakura Glass Garden.
+   - Architecture Built:
+     1. Unified Sub-floor & Grand Promenade:
+        - 520x168 block conservatory envelope at Y=99-100.
+        - 32-block wide Grand Central Promenade with smooth stone, stone brick curbs,
+          and Japanese dark oak walkways.
+     2. Central Japanese Garden (X: -32 to 32, Z: -16 to 16):
+        - Curved Koi pond with water, riverbed gravel, sea lanterns, and lily pads.
+        - Arched traditional moon bridge with spruce stairs, dark oak railings, and lanterns.
+        - Japanese Tea House with spruce pillars, quartz walls, dark oak curved eaves.
+        - Natural stone waterfall cascading into the koi pond.
+        - Zen rock garden with moss blocks, smooth stone boulders, and bamboo clusters.
+     3. 16 Agricultural Plots (4x4 chunks = 64x64 blocks each):
+        - Plots 1-8 (North row) and Plots 9-16 (South row).
+        - Japanese Torii gatehouse lintels with dark oak slabs and hanging lanterns.
+        - Perimeter curb separating plots from walkways.
+        - 100% moisture irrigation grid (waterlogged stone slabs over sea lanterns every 8 blocks).
+        - Farmland tilled at Y=100.
+        - Plot 1 pre-seeded with mature golden wheat.
+     4. Fully Enclosing Japanese Exterior Walls:
+        - White quartz base with dark oak timber frame pillars every 8 blocks.
+        - Light gray and pink stained glass clerestory windows up to Y=110.
+     5. West Arrival Grand Torii Gate & East Sacred Sakura Shrine:
+        - West: Giant crimson Torii gate arrival pavilion with stone steps and lantern braziers.
+        - East: Elarion's sacred Sakura shrine rotunda with chiseled quartz and offering pedestal.
+     6. Custom Cherry Blossom Trees (Sakura Landscaping):
+        - 12 massive procedural Sakura trees around the perimeter and boulevard.
+        - Curved dark oak wood trunks, flowering cherry leaf canopies, pink wool accents,
+          and fallen pink petal carpets.
+     7. Gigantic Transparent Curved Glass Canopy:
+        - Continuous curved glass roof barrel vaults over North & South wings (Y up to 124).
+        - Central Grand Boulevard vault (Y up to 120).
+        - Grand Crossing Rotunda dome (radius 32, Y up to 126).
+        - Zero void openings or vertical gaps; allows full view of sky.
+
+--------------------------------------------------------------------------------
+D. CORE GARDEN SERVICES & GAMEPLAY ENGINES
+--------------------------------------------------------------------------------
+
+9. garden/GardenService.java & garden/DefaultGardenService.java
+   - Role: Primary interface and implementation managing Gardens.
+   - Key Capabilities:
+     * getGarden(islandId): Fetches cached or database garden.
+     * getGardenAt(Location loc): Looks up garden by world spatial key.
+     * getPlotAt(Location loc): Resolves exact 4x4 chunk plot containing coordinates.
+     * getPlots(islandId): Fetches 16 plots. AUTO-HEALS: If an island's garden exists in
+       sr_gardens but sr_garden_plots has 0 rows, it automatically initializes and persists
+       all 16 plots with Plot 1 unlocked!
+     * unlockPlot(islandId, plotIndex): Unlocks a plot asynchronously and updates database.
+     * teleportToGarden(player, islandId): Safe teleport to West Grand Torii Gate arrival dais.
+     * teleportToIsland(player, islandId): Safe teleport to player's SkyBlock island.
+     * isGardenWorld(world): Validates if world is "skyrealms_garden".
+
+10. garden/NaturalFarmingEngine.java
+    - Role: Natural farming engine governing crop planting, growth, maturity, and harvesting.
+    - Supported Crops: WHEAT, CARROTS, POTATOES, BEETROOTS, MELON, PUMPKIN, SUGAR_CANE,
+      CACTUS, COCOA, NETHER_WART.
+    - Maturity Validation (isMature):
+      * Ageable crops (Wheat, Carrots, Potatoes, Beetroots, Cocoa, Nether Wart): age >= maxAge.
+      * Stem crops (Melon, Pumpkin): must not be tagged as player-placed.
+      * Vertical crops (Sugar Cane, Cactus): must be above an existing stalk & not player-placed.
+    - Anti-Exploit System:
+      * Fast bit-packed block coordinate keys: (((x & 0x3FFFFFF) << 38) | ((y & 0xFFF) << 26) | (z & 0x3FFFFFF)).
+      * Tracks manual block placements in ConcurrentHashMap; clears on natural growth/spread.
+      * Prevents placing and re-breaking crops to duplicate XP or mastery.
+    - Harvesting Methods:
+      * handleRightClickHarvest(player, block):
+        - Validates maturity. If immature, sends action bar: "⚠ This crop is not fully grown yet!"
+        - Resolves plot (with resilient starter plot fallback inside the garden).
+        - Fires GardenCropHarvestEvent.
+        - Replants crop automatically (resets age to 0) or clears air.
+        - Directly deposits crop drops into player inventory (overflow drops on ground).
+        - Awards farming XP, collection count, particles (HAPPY_VILLAGER), and pickup sound.
+      * handleBreakHarvest(player, block):
+        - Handles manual left-click break.
+        - Validates maturity. If immature, sends action bar: "⚠ This crop is not fully grown yet!"
+        - Resolves plot (with resilient starter plot fallback inside the garden).
+        - Fires GardenCropHarvestEvent.
+        - Awards farming XP and collections.
+
+11. garden/NaturalFarmingListener.java
+    - Role: Bukkit listener integrating natural farming into Minecraft world events.
+    - Events:
+      * onPlayerInteract: Intercepts right-clicks on mature crops for instant replant harvest.
+      * onBlockBreak: Intercepts normal breaking of garden crops.
+      * onBlockPlace: Tags placed stems/canes as player-placed; publishes GardenCropPlantEvent
+        when seeds are planted inside unlocked plots.
+      * onBlockGrow & onBlockSpread: Clears player-placed tags on natural growth; provides
+        bonus chime and accelerated growth for fertile soil.
+
+12. garden/GardenProtectionListener.java
+    - Role: Strict protection engine for the Sakura Glass Garden conservatory.
+    - Rules:
+      * Validates player island membership and BLOCK_BREAK / BLOCK_PLACE permissions.
+      * Within plots: Allows crop planting and harvesting only if plot is unlocked.
+        If plot is locked, cancels action and informs player: "🔒 Plot #X is locked!"
+      * Outside plots: Protects all conservatory architecture (Quartz, Stained Glass,
+        Cherry logs/leaves/wood, Torii arches, walkways, Tea House, lamps). Prevents dismantling.
+      * Void Boundary Fallback: Intercepts player moves or falls outside region bounds and
+        teleports them back safely to the West Torii entrance.
+
+--------------------------------------------------------------------------------
+E. DIVINE OFFERING & CINEMATIC WORKFLOW
+--------------------------------------------------------------------------------
+
+13. garden/item/GardenItemFactory.java
+    - Role: Factory for custom persistent items using Bukkit's PersistentDataContainer.
+    - Custom Items:
+      * Enchanted Hay Bale (ID: "enchanted_hay_bale"): Custom lore, shiny foil, golden name.
+      * Enchanted Carrot (ID: "enchanted_carrot"): Custom lore, golden name.
+      * Enchanted Sugar Cane (ID: "enchanted_sugar_cane"): Custom lore, aqua name.
+      * Novice Hoe (ID: "novice_hoe"): Unbreakable, custom botanist lore.
+    - Validation: isCustomItem(ItemStack, expectedId) inspects namespaced PDC key.
+
+14. garden/offering/OfferingService.java & garden/offering/DefaultOfferingService.java
+    - Role: Validates offering requirements, enforces atomic consumption, and manages unlocks.
+    - Requirements: Exactly 3 Enchanted Hay Bales, 3 Enchanted Carrots, 3 Enchanted Sugar Cane.
+    - Key Methods:
+      * validateInventory(inv): Counts custom items via PDC.
+      * processOffering(player, chestBlock, islandId):
+        - Mutex lock preventing concurrent submissions on the same island.
+        - Island permission check (CONTAINER_ACCESS).
+        - Duplicate prevention check (isGardenUnlocked).
+        - Atomic consumption on Bukkit main thread.
+        - Persists submission to sr_garden_offerings and sr_garden_unlocks.
+        - Launches DivineCinematicService.
+      * resetOfferingAndUnlock(islandId): Wipes offering and unlock records from database
+        and clears in-memory cache for admin resets.
+
+15. garden/offering/OfferingListener.java
+    - Role: Detects player interaction with chests named "Offering to the Gods" on their island.
+    - Intercepts chest close / interact to evaluate contents and trigger processOffering.
+
+16. garden/cinematic/DivineCinematicService.java
+    - Role: 6-second in-game divine cinematic sequence upon offering submission.
+    - Sequence (Vanilla-Safe, No Resource Pack Required):
+      * Tick 0: Lightning strike (visual effect, no fire/damage), BEACON_ACTIVATE sound,
+        flame and holy totem particles.
+      * Tick 20: Spawns divine emissary (glowing, invulnerable, silent Allay) hovering at Y+2.5.
+        Compact subtitle: "The heavens accept your tribute...".
+      * Tick 60: Emissary ascends in a spiral of cherry petals and end-rod light.
+        Title: "DIVINE BLESSING" / Subtitle: "The Botanical Gods smile upon your realm."
+      * Tick 100: Giant chime sound (UI_TOAST_CHALLENGE_COMPLETE), burst of firework sparks.
+        Title: "GARDEN UNLOCKED" / Subtitle: "Type /garden to enter the Sakura Conservatory!"
+      * Tick 120: Emissary departs with a poof of cloud particles. Permanent unlock persisted.
+        Online co-op island members receive audio-visual celebration and chat broadcast.
+
+--------------------------------------------------------------------------------
+F. ELARION BOTANIST INTRODUCTION & FIRST HARVEST QUEST
+--------------------------------------------------------------------------------
+
+17. garden/intro/ElarionService.java
+    - Role: First-entry NPC welcome sequence and starter gear disbursement.
+    - Actions:
+      * Tracks completion in sr_player_research (elarion_intro_completed).
+      * Plays BEACON_ACTIVATE sound & shows compact title: "GARDEN CONSERVATORY".
+      * Delivers starter supplies: Novice Hoe, 16 Wheat Seeds, 8 Bone Meal.
+      * Automatically starts the First Harvest quest.
+      * Displays rich, vanilla-font-safe tutorial dialogue in chat explaining plots,
+        irrigation, natural farming, and crop mastery.
+      * resetIntro(playerUuid): Resets completion flag in cache and database.
+
+18. garden/intro/ElarionListener.java
+    - Role: Detects PlayerChangedWorldEvent and PlayerJoinEvent into "skyrealms_garden"
+      to trigger ElarionService.triggerIntro(player).
+
+19. garden/quest/FarmingQuestService.java & garden/quest/DefaultFarmingQuestService.java
+    - Role: Quest tracking and reward fulfillment engine.
+    - Quest: "first_harvest" (Target = 16).
+      * Objective 1: Prepare 16 farmland blocks (recordTill).
+      * Objective 2: Plant 16 wheat seeds (recordPlant).
+      * Objective 3: Harvest 16 mature wheat (recordHarvest).
+    - Completion Rewards:
+      * +500 Farming XP (awarded via FarmingProgressionService).
+      * +2,500 Coins (deposited via EconomyService with unique transaction key).
+      * +16 Carrots (deposited directly to inventory or ground drop).
+      * Challenge complete fanfare title, toast sound, and chat summary.
+    - Methods:
+      * startQuest(playerUuid, questId): Initializes quest in IN_PROGRESS state.
+      * resetQuest(playerUuid, questId): Deletes quest from cache and database for admin resets.
+
+20. garden/quest/FarmingQuestListener.java
+    - Role: Event listener tracking player actions to increment quest progress.
+    - Intercepts:
+      * Hoe right-click on dirt/grass in garden -> recordTill.
+      * Wheat seed planting in garden -> recordPlant.
+      * GardenCropHarvestEvent for "WHEAT" -> recordHarvest.
+
+--------------------------------------------------------------------------------
+G. CROP MASTERY PROGRESSION SYSTEM
+--------------------------------------------------------------------------------
+
+21. garden/mastery/CropType.java
+    - Role: Enum representing all 10 garden crops.
+    - Values:
+      * WHEAT ("Wheat", Material.WHEAT, icon: "◆", baseXP: 10)
+      * CARROTS ("Carrots", Material.CARROTS, icon: "◆", baseXP: 12)
+      * POTATOES ("Potatoes", Material.POTATOES, icon: "◆", baseXP: 12)
+      * BEETROOTS ("Beetroots", Material.BEETROOTS, icon: "◆", baseXP: 15)
+      * MELON ("Melon", Material.MELON, icon: "◆", baseXP: 18)
+      * PUMPKIN ("Pumpkin", Material.PUMPKIN, icon: "◆", baseXP: 20)
+      * SUGAR_CANE ("Sugar Cane", Material.SUGAR_CANE, icon: "◆", baseXP: 14)
+      * CACTUS ("Cactus", Material.CACTUS, icon: "◆", baseXP: 16)
+      * COCOA ("Cocoa Beans", Material.COCOA, icon: "◆", baseXP: 15)
+      * NETHER_WART ("Nether Wart", Material.NETHER_WART, icon: "◆", baseXP: 25)
+
+22. garden/mastery/CropMastery.java
+    - Role: Domain model for a player's mastery in a specific crop (levels 0 to 30).
+    - Formulas:
+      * Level Requirement: floor(50.0 * Math.pow(level, 2.1)).
+        Level 1: 50 XP | Level 5: 1,460 XP | Level 15: 14,792 XP | Level 30: 63,230 XP.
+      * progressToNextLevel(): Fractional progress (0.0 to 1.0) towards next level.
+      * getTotalDoubleDropBonus(): Sum of double-drop chances from all claimed milestones.
+      * Milestone encoding/decoding: Comma-separated strings (e.g. "1,5,10").
+
+23. garden/mastery/MasteryMilestone.java
+    - Role: Defines the 7 distinct milestone tiers for each crop at levels 1, 5, 10, 15, 20, 25, 30.
+    - Rewards include:
+      * Level 1: +5% double drop chance.
+      * Level 5: +10% double drop chance + Tier 1 perk (e.g. Night Vision for Carrot, Speed for Cane).
+      * Level 10: +10% double drop chance + Tier 2 perk (e.g. Haste for Cocoa).
+      * Level 15: +10% double drop chance + Tier 3 perk (e.g. Fire Resistance for Nether Wart).
+      * Level 20: +15% double drop chance + Rare mutation boosts.
+      * Level 25: +15% double drop chance + Coin economy bonus.
+      * Level 30: Grandmaster Harvester: +20% double drop chance + Title & Major Coin Grant.
+
+24. garden/mastery/CropMasteryService.java & garden/mastery/DefaultCropMasteryService.java
+    - Role: Core service for mastery XP awards, level-ups, milestone claims, and persistence.
+    - Methods:
+      * getMastery(playerUuid, cropType): Returns cached or database mastery.
+      * getAllMasteries(playerUuid): Returns list of all 10 crop masteries.
+      * awardMasteryXp(player, cropType, xp): Adds XP, checks level-up, plays LEVELUP sound,
+        shows title, and saves asynchronously to sr_crop_mastery.
+      * claimMilestone(player, cropType, level): Validates level, marks milestone claimed,
+        deposits coin rewards via EconomyService, and saves.
+      * openMasteryGui(player): Opens the interactive multi-page overview GUI.
+
+25. garden/mastery/CropMasteryListener.java
+    - Role: Event listener awarding mastery on harvest and managing GUI navigation.
+    - Actions on GardenCropHarvestEvent:
+      * Awards crop-specific mastery XP.
+      * Rolls double-drop chance: if triggered, duplicates crop items into inventory.
+      * Applies active potion effects (Night Vision, Speed, Haste, Fire Resistance).
+      * Authoritative Action Bar: Sends real-time feedback on every harvest:
+        "+10 Farming XP | +10 Wheat Mastery [Lvl 0 - 20%] [DOUBLE DROP!]"
+    - GUI Click Handler:
+      * Uses InventoryHolder validation (CropOverviewHolder, CropDetailHolder).
+      * Cancels clicks to prevent item dragging.
+      * Clicking crop in overview navigates to detailed milestone view.
+      * Clicking back arrow returns to overview.
+      * Clicking achieved milestone claims coin rewards.
+
+26. garden/mastery/CropMasteryGui.java
+    - Role: Two-tier 54-slot chest GUI builder for Crop Mastery.
+    - Classes:
+      * CropOverviewHolder: Authoritative holder for the 10-crop overview menu.
+      * CropDetailHolder: Authoritative holder for a specific crop's 7-milestone menu.
+    - Layout:
+      * Overview: Displays all 10 crops in centered slots with progress bars, level, XP,
+        and current double-drop bonus lore.
+      * Detail: Displays 7 milestones across the center row with status indicators
+        ([✓] Claimed, [!] Click to Claim, [LOCKED]), back button, and close button.
+
+--------------------------------------------------------------------------------
+H. CUSTOM EVENTS
+--------------------------------------------------------------------------------
+
+27. event/GardenCropHarvestEvent.java
+    - Role: Cancellable SkyRealms event published whenever a player harvests a garden crop.
+    - Contains: Player, Garden, GardenPlot, cropType (String), drops (List<ItemStack>), farmingXp (long).
+    - Subscribed by: CropMasteryListener and FarmingQuestListener.
+
+28. event/GardenCropPlantEvent.java
+    - Role: Cancellable event published when a player plants seeds inside an unlocked plot.
+    - Contains: Player, Garden, GardenPlot, cropType, block Location.
+
+--------------------------------------------------------------------------------
+I. LEGACY GENERATOR RETIREMENT
+--------------------------------------------------------------------------------
+
+29. legacy/LegacyGeneratorRetirementListener.java
+    - Role: Graceful transition engine retiring old physical 5x5 Farming Generators.
+    - Actions:
+      * Intercepts BlockPlaceEvent with legacy farming cores (identified via PDC CORE_KEY).
+      * Cancels block placement.
+      * Replaces the core with a full coin refund via EconomyService based on core tier.
+      * Displays guidance message directing player to the new /garden system.
+
+
+================================================================================
+4. DATABASE SCHEMA & FLYWAY MIGRATIONS
+================================================================================
+
+All SQL migrations are located under:
+plugins/SkyRealmsDatabase/src/main/resources/db/migration/
+
+1. V5__create_garden_tables.sql
+   - sr_gardens:
+     * garden_id (UUID, PK)
+     * island_id (UUID, UK, FK sr_islands ON DELETE CASCADE)
+     * region_index (INTEGER, UK)
+     * world_name (VARCHAR(64), default 'skyrealms_garden')
+     * center_x, center_y, center_z (INTEGER)
+     * size (INTEGER, default 256)
+     * unlocked (BOOLEAN, default TRUE)
+     * created_at, updated_at (TIMESTAMP WITH TIME ZONE)
+   - sr_garden_plots:
+     * island_id (UUID, FK sr_islands ON DELETE CASCADE)
+     * plot_index (INTEGER, 1 to 16)
+     * unlocked (BOOLEAN, default FALSE)
+     * crop_type (VARCHAR(32))
+     * soil_type (VARCHAR(32), default 'BALANCED')
+     * fertility, moisture, nutrient_level (DOUBLE PRECISION, default 1.0)
+     * updated_at (TIMESTAMP WITH TIME ZONE)
+     * PK: (island_id, plot_index)
+   - sr_garden_unlocks:
+     * island_id (UUID, PK, FK sr_islands ON DELETE CASCADE)
+     * offering_completed (BOOLEAN, default FALSE)
+     * cinematic_completed (BOOLEAN, default FALSE)
+     * unlocked_at (TIMESTAMP WITH TIME ZONE)
+   - sr_crop_mastery:
+     * player_uuid (UUID, FK sr_players ON DELETE CASCADE)
+     * crop_type (VARCHAR(32))
+     * mastery_xp (BIGINT, default 0)
+     * mastery_level (INTEGER, default 0)
+     * updated_at (TIMESTAMP WITH TIME ZONE)
+     * PK: (player_uuid, crop_type)
+
+2. V6__create_garden_quests_and_milestones.sql
+   - sr_garden_offerings:
+     * island_id (UUID, PK, FK sr_islands ON DELETE CASCADE)
+     * submitted_by (UUID, FK sr_players ON DELETE CASCADE)
+     * hay_bales_count, carrots_count, sugar_cane_count (INTEGER, default 3)
+     * status (VARCHAR(32), default 'COMPLETED')
+     * submitted_at (TIMESTAMP WITH TIME ZONE)
+   - sr_farming_quests:
+     * player_uuid (UUID, FK sr_players ON DELETE CASCADE)
+     * quest_id (VARCHAR(64))
+     * status (VARCHAR(32), default 'IN_PROGRESS')
+     * tilled_count, planted_count, harvested_count (INTEGER, default 0)
+     * completed_at (TIMESTAMP WITH TIME ZONE)
+     * claimed_rewards (BOOLEAN, default FALSE)
+     * updated_at (TIMESTAMP WITH TIME ZONE)
+     * PK: (player_uuid, quest_id)
+   - Alterations:
+     * sr_crop_mastery ADD COLUMN claimed_milestones VARCHAR(256) DEFAULT ''
+     * sr_player_research ADD COLUMN elarion_intro_completed BOOLEAN DEFAULT FALSE
+
+
+================================================================================
+5. COMMANDS & ADMINISTRATIVE CONTROLS
+================================================================================
+
+Player Commands:
+  /garden              -> Teleport to your Greenhouse Dome (alias: /g, /garden home)
+  /garden home         -> Teleport to your Greenhouse Dome (checks offering unlock)
+  /garden leave        -> Teleport back to your Island spawn
+  /garden mastery      -> Open the 10-crop Mastery progression GUI (alias: /garden skills)
+  /garden quest        -> View First Harvest quest objectives and current progress
+  /garden info         -> View your Garden coordinates and region extents
+  /garden plots        -> View the status and crops of all 16 agricultural plots
+  /garden help         -> View the Garden command guide
+
+Admin Commands (Permission: skyrealms.garden.admin or Server OP):
+  /garden admin tp <player>
+    - Teleports admin directly to target player's Garden conservatory.
+  /garden admin reset <player>
+    - Full progression and ritual reset. Wipes offering history, locks garden access,
+      resets Elarion intro, wipes First Harvest quest, and teleports player back to island.
+      Player must complete the Divine Offering ritual again.
+  /garden admin unlockplot <player> <1-16>
+    - Instantly unlocks a specific plot for target player's island garden.
+  /garden admin giveitem <player> <hay|carrot|cane|hoe|seeds|bonemeal> [amount]
+    - Spawns authentic custom offering items or starter supplies for testing and player assistance.
+
+
+================================================================================
+6. STEP-BY-STEP GAMEPLAY LIFECYCLE
+================================================================================
+
+Step 1: The Divine Offering
+  - Player crafts:
+    * 3x Enchanted Hay Bales
+    * 3x Enchanted Carrots
+    * 3x Enchanted Sugar Cane
+  - Player places them in a chest renamed: "Offering to the Gods" on their island.
+  - OfferingListener detects the submission and initiates DefaultOfferingService.
+  - Items are consumed atomically. Concurrency lock prevents duplicate submissions.
+
+Step 2: The Divine Arrival Cinematic
+  - A thunderstorm crackles (visual only, no fire).
+  - An Allay Divine Emissary spawns, floating in a column of sacred light and cherry petals.
+  - Subtitles explain that the Botanical Gods are pleased with the island's tribute.
+  - Permanent access to the Sakura Conservatory is granted and saved in the database.
+
+Step 3: Entering the Conservatory & Meeting Elarion
+  - Player runs /garden home.
+  - Player arrives at the West Grand Torii Gate arrival pavilion inside skyrealms_garden.
+  - Elarion the Botanist greets the player, welcomes them beneath the glass dome, and gives:
+    * Novice Hoe (Unbreakable)
+    * 16x Wheat Seeds
+    * 8x Bone Meal
+  - The "First Harvest" quest begins automatically.
+
+Step 4: The First Harvest Quest
+  - Objective 1: Prepare 16 Farmland (tilling dirt in Plot 1 with the Novice Hoe).
+  - Objective 2: Plant 16 Wheat Seeds in Plot 1.
+  - Objective 3: Grow and harvest 16 mature golden wheat.
+  - Action bar shows live progress on every tilled, planted, or harvested crop.
+  - On completion: +500 Farming XP, +2,500 Coins, +16 Carrots, challenge toast fanfare.
+
+Step 5: Crop Mastery Progression & Plot Expansion
+  - Every harvested crop awards global Farming XP and specific Crop Mastery XP.
+  - Action bar shows: +10 Farming XP | +10 Wheat Mastery [Lvl 1 - 50%]
+  - Reaching milestone levels (1, 5, 10, 15, 20, 25, 30) unlocks permanent perks:
+    double drop rates, speed/haste/night-vision buffs, rare golden crops, coin rewards.
+  - Players type /garden mastery to inspect their progress and claim rewards.
+  - Players type /garden plots to unlock and cultivate plots 2 through 16!
+================================================================================
