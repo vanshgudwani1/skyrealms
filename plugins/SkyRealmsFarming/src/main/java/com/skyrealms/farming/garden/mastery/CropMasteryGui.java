@@ -9,6 +9,7 @@ import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -19,14 +20,59 @@ import java.util.*;
 
 /**
  * 54-slot interactive chest inventory GUI for Crop Mastery overview and milestone progression.
+ * Uses authoritative InventoryHolder markers for guaranteed click cancellation and navigation.
  */
 public final class CropMasteryGui {
 
-    public static final String TITLE_OVERVIEW = "🌸 Agricultural Crop Mastery";
-    public static final String TITLE_DETAIL_PREFIX = "🌿 Mastery: ";
+    public static final String TITLE_OVERVIEW = "Crop Mastery Progression";
+    public static final String TITLE_DETAIL_PREFIX = "Mastery: ";
 
-    private static final int[] CROP_SLOTS = { 19, 20, 21, 22, 23, 24, 25, 29, 31, 33 };
-    private static final int[] MILESTONE_SLOTS = { 19, 21, 23, 25, 29, 31, 33 };
+    public static final int[] CROP_SLOTS = { 19, 20, 21, 22, 23, 24, 25, 29, 31, 33 };
+    public static final int[] MILESTONE_SLOTS = { 19, 21, 23, 25, 29, 31, 33 };
+
+    /**
+     * Authoritative InventoryHolder marker for the 10-crop overview GUI.
+     */
+    public static final class CropOverviewHolder implements InventoryHolder {
+        private Inventory inventory;
+
+        @Override
+        @NotNull
+        public Inventory getInventory() {
+            return inventory;
+        }
+
+        public void setInventory(Inventory inventory) {
+            this.inventory = inventory;
+        }
+    }
+
+    /**
+     * Authoritative InventoryHolder marker for an individual crop's milestone progression GUI.
+     */
+    public static final class CropDetailHolder implements InventoryHolder {
+        private final CropType cropType;
+        private Inventory inventory;
+
+        public CropDetailHolder(@NotNull CropType cropType) {
+            this.cropType = cropType;
+        }
+
+        @NotNull
+        public CropType getCropType() {
+            return cropType;
+        }
+
+        @Override
+        @NotNull
+        public Inventory getInventory() {
+            return inventory;
+        }
+
+        public void setInventory(Inventory inventory) {
+            this.inventory = inventory;
+        }
+    }
 
     private CropMasteryGui() {}
 
@@ -34,7 +80,9 @@ public final class CropMasteryGui {
      * Opens the 54-slot overview GUI showing all 10 crops.
      */
     public static void openOverview(@NotNull Player player, @NotNull CropMasteryService service) {
-        Inventory inv = Bukkit.createInventory(null, 54, Component.text(TITLE_OVERVIEW, NamedTextColor.DARK_PURPLE, TextDecoration.BOLD));
+        CropOverviewHolder holder = new CropOverviewHolder();
+        Inventory inv = Bukkit.createInventory(holder, 54, Component.text(TITLE_OVERVIEW, NamedTextColor.DARK_PURPLE, TextDecoration.BOLD));
+        holder.setInventory(inv);
 
         // Decorative background panes
         ItemStack border = createPane(Material.PINK_STAINED_GLASS_PANE, " ");
@@ -87,7 +135,7 @@ public final class CropMasteryGui {
         ItemStack close = new ItemStack(Material.BARRIER);
         ItemMeta closeMeta = close.getItemMeta();
         if (closeMeta != null) {
-            closeMeta.displayName(Component.text("✖ Close Menu", NamedTextColor.RED, TextDecoration.BOLD)
+            closeMeta.displayName(Component.text("[X] Close Menu", NamedTextColor.RED, TextDecoration.BOLD)
                     .decoration(TextDecoration.ITALIC, false));
             close.setItemMeta(closeMeta);
         }
@@ -100,11 +148,13 @@ public final class CropMasteryGui {
      * Opens the detailed 7-milestone view for a specific crop.
      */
     public static void openCropDetail(@NotNull Player player, @NotNull CropType crop, @NotNull CropMasteryService service) {
+        CropDetailHolder holder = new CropDetailHolder(crop);
         Inventory inv = Bukkit.createInventory(
-                null,
+                holder,
                 54,
                 Component.text(TITLE_DETAIL_PREFIX + crop.displayName(), TextColor.fromHexString("#77DD77"), TextDecoration.BOLD)
         );
+        holder.setInventory(inv);
 
         ItemStack border = createPane(Material.LIME_STAINED_GLASS_PANE, " ");
         ItemStack accent = createPane(Material.GREEN_STAINED_GLASS_PANE, " ");
@@ -132,7 +182,7 @@ public final class CropMasteryGui {
         ItemStack back = new ItemStack(Material.ARROW);
         ItemMeta backMeta = back.getItemMeta();
         if (backMeta != null) {
-            backMeta.displayName(Component.text("⬅ Return to Overview", NamedTextColor.YELLOW, TextDecoration.BOLD)
+            backMeta.displayName(Component.text("<< Return to Overview", NamedTextColor.YELLOW, TextDecoration.BOLD)
                     .decoration(TextDecoration.ITALIC, false));
             back.setItemMeta(backMeta);
         }
@@ -146,7 +196,7 @@ public final class CropMasteryGui {
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return item;
 
-        meta.displayName(Component.text(crop.symbol() + " " + crop.displayName() + " Mastery", NamedTextColor.GOLD, TextDecoration.BOLD)
+        meta.displayName(Component.text("◆ " + crop.displayName() + " Mastery", NamedTextColor.GOLD, TextDecoration.BOLD)
                 .decoration(TextDecoration.ITALIC, false));
 
         List<Component> lore = new ArrayList<>();
@@ -202,10 +252,10 @@ public final class CropMasteryGui {
         if (meta == null) return item;
 
         if (unlocked) {
-            meta.displayName(Component.text("✔ Level " + milestone.level() + ": " + milestone.title(), NamedTextColor.GREEN, TextDecoration.BOLD)
+            meta.displayName(Component.text("[✓] Level " + milestone.level() + ": " + milestone.title(), NamedTextColor.GREEN, TextDecoration.BOLD)
                     .decoration(TextDecoration.ITALIC, false));
         } else {
-            meta.displayName(Component.text("🔒 Level " + milestone.level() + ": " + milestone.title(), NamedTextColor.RED, TextDecoration.BOLD)
+            meta.displayName(Component.text("[LOCKED] Level " + milestone.level() + ": " + milestone.title(), NamedTextColor.RED, TextDecoration.BOLD)
                     .decoration(TextDecoration.ITALIC, false));
         }
 

@@ -202,4 +202,39 @@ class GardenOfferingAndQuestRepositoryTest {
         List<FarmingRepository.CropMasteryRecord> all = repository.findAllCropMasteries(testPlayerId);
         assertThat(all).hasSize(1);
     }
+
+    @Test
+    @DisplayName("Should delete offering and unlock records on reset")
+    void shouldDeleteOfferingAndUnlockOnReset() throws SQLException {
+        Instant now = Instant.now();
+        repository.saveOffering(new FarmingRepository.GardenOffering(
+                testIslandId, testPlayerId, 3, 3, 3, "COMPLETED", now
+        ));
+        repository.saveGardenUnlock(new FarmingRepository.GardenUnlock(
+                testIslandId, true, true, now
+        ));
+
+        assertThat(repository.findOfferingByIsland(testIslandId)).isPresent();
+        assertThat(repository.findGardenUnlock(testIslandId)).isPresent();
+
+        repository.deleteOfferingAndUnlock(testIslandId);
+
+        assertThat(repository.findOfferingByIsland(testIslandId)).isEmpty();
+        assertThat(repository.findGardenUnlock(testIslandId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Should delete quest progress on reset")
+    void shouldDeleteQuestProgressOnReset() throws SQLException {
+        String questId = "first_harvest";
+        repository.saveQuestProgress(new FarmingRepository.FarmingQuest(
+                testPlayerId, questId, "IN_PROGRESS", 5, 5, 5, null, false, Instant.now()
+        ));
+
+        assertThat(repository.findQuestProgress(testPlayerId, questId)).isPresent();
+
+        repository.deleteQuestProgress(testPlayerId, questId);
+
+        assertThat(repository.findQuestProgress(testPlayerId, questId)).isEmpty();
+    }
 }

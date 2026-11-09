@@ -159,17 +159,30 @@ public final class NaturalFarmingEngine {
      */
     public boolean handleRightClickHarvest(@NotNull Player player, @NotNull Block block) {
         if (!isMature(block)) {
+            player.sendActionBar(Component.text("⚠ This crop is not fully grown yet!", NamedTextColor.GOLD));
             return false;
         }
 
         Optional<Garden> optGarden = gardenService.getGardenAt(block.getLocation());
         if (optGarden.isEmpty()) return false;
 
-        Optional<GardenPlot> optPlot = gardenService.getPlotAt(block.getLocation());
-        if (optPlot.isEmpty() || !optPlot.get().unlocked()) return false;
-
         Garden garden = optGarden.get();
-        GardenPlot plot = optPlot.get();
+        Optional<GardenPlot> optPlot = gardenService.getPlotAt(block.getLocation());
+        GardenPlot plot;
+        if (optPlot.isPresent()) {
+            plot = optPlot.get();
+            if (!plot.unlocked()) {
+                player.sendMessage(Component.text("🔒 Plot #" + plot.plotIndex() + " is locked! Unlock it with /garden plots.", NamedTextColor.RED));
+                return false;
+            }
+        } else {
+            plot = gardenService.getPlots(garden.islandId()).stream()
+                    .filter(GardenPlot::unlocked)
+                    .findFirst()
+                    .orElse(null);
+            if (plot == null) return false;
+        }
+
         Material originalMat = block.getType();
         String cropId = getCropId(originalMat);
 
@@ -222,11 +235,6 @@ public final class NaturalFarmingEngine {
         player.playSound(center, Sound.ENTITY_ITEM_PICKUP, 0.8f, 1.3f);
         player.spawnParticle(Particle.HAPPY_VILLAGER, center, 6, 0.2, 0.2, 0.2, 0.05);
 
-        FarmingPlayerProgress progress = progressionService.getProgress(player.getUniqueId());
-        player.sendActionBar(Component.text("+ " + event.farmingXpAwarded() + " Farming XP ", TextColor.fromHexString("#77DD77"))
-                .append(Component.text("[" + cropId + "] ", NamedTextColor.GOLD))
-                .append(Component.text("(Level " + progress.farmingLevel() + ")", NamedTextColor.YELLOW)));
-
         return true;
     }
 
@@ -236,17 +244,30 @@ public final class NaturalFarmingEngine {
     public boolean handleBreakHarvest(@NotNull Player player, @NotNull Block block) {
         if (!isMature(block)) {
             clearPlayerPlaced(block);
+            player.sendActionBar(Component.text("⚠ This crop is not fully grown yet!", NamedTextColor.GOLD));
             return false;
         }
 
         Optional<Garden> optGarden = gardenService.getGardenAt(block.getLocation());
         if (optGarden.isEmpty()) return false;
 
-        Optional<GardenPlot> optPlot = gardenService.getPlotAt(block.getLocation());
-        if (optPlot.isEmpty() || !optPlot.get().unlocked()) return false;
-
         Garden garden = optGarden.get();
-        GardenPlot plot = optPlot.get();
+        Optional<GardenPlot> optPlot = gardenService.getPlotAt(block.getLocation());
+        GardenPlot plot;
+        if (optPlot.isPresent()) {
+            plot = optPlot.get();
+            if (!plot.unlocked()) {
+                player.sendMessage(Component.text("🔒 Plot #" + plot.plotIndex() + " is locked! Unlock it with /garden plots.", NamedTextColor.RED));
+                return false;
+            }
+        } else {
+            plot = gardenService.getPlots(garden.islandId()).stream()
+                    .filter(GardenPlot::unlocked)
+                    .findFirst()
+                    .orElse(null);
+            if (plot == null) return false;
+        }
+
         Material originalMat = block.getType();
         String cropId = getCropId(originalMat);
 
@@ -267,11 +288,6 @@ public final class NaturalFarmingEngine {
         long totalCollected = drops.stream().filter(d -> d.getType() == originalMat).mapToInt(ItemStack::getAmount).sum();
         if (totalCollected == 0) totalCollected = 1;
         progressionService.incrementCollection(player.getUniqueId(), cropId, totalCollected);
-
-        FarmingPlayerProgress progress = progressionService.getProgress(player.getUniqueId());
-        player.sendActionBar(Component.text("+ " + event.farmingXpAwarded() + " Farming XP ", TextColor.fromHexString("#77DD77"))
-                .append(Component.text("[" + cropId + "] ", NamedTextColor.GOLD))
-                .append(Component.text("(Level " + progress.farmingLevel() + ")", NamedTextColor.YELLOW)));
 
         return true;
     }

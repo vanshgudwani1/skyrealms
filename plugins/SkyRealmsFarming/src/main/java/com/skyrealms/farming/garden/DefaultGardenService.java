@@ -69,9 +69,22 @@ public final class DefaultGardenService implements GardenService {
                 spatialIndex.put(key, garden.islandId());
 
                 List<GardenPlot> plots = repository.findPlotsByIsland(garden.islandId());
-                if (!plots.isEmpty()) {
-                    plotsByIsland.put(garden.islandId(), new ArrayList<>(plots));
+                if (plots.isEmpty()) {
+                    logger.info("Auto-initializing 16 plots for Garden of island " + garden.islandId());
+                    for (int i = 1; i <= 16; i++) {
+                        GardenPlot plot = new GardenPlot(
+                                garden.islandId(),
+                                i,
+                                (i == 1),
+                                (i == 1) ? "WHEAT" : null,
+                                "BALANCED",
+                                1.0, 1.0, 1.0
+                        );
+                        repository.savePlot(plot);
+                        plots.add(plot);
+                    }
                 }
+                plotsByIsland.put(garden.islandId(), new ArrayList<>(plots));
             }
             logger.info("Loaded " + gardens.size() + " active SkyRealms Gardens from database.");
         } catch (SQLException e) {
@@ -216,11 +229,29 @@ public final class DefaultGardenService implements GardenService {
     @NotNull
     public List<GardenPlot> getPlots(@NotNull UUID islandId) {
         List<GardenPlot> cached = plotsByIsland.get(islandId);
-        if (cached != null) {
+        if (cached != null && !cached.isEmpty()) {
             return Collections.unmodifiableList(cached);
         }
         try {
             List<GardenPlot> fromDb = repository.findPlotsByIsland(islandId);
+            if (fromDb.isEmpty()) {
+                logger.info("Initializing 16 default plots on demand for island " + islandId);
+                List<GardenPlot> initialPlots = new ArrayList<>(16);
+                for (int i = 1; i <= 16; i++) {
+                    GardenPlot plot = new GardenPlot(
+                            islandId,
+                            i,
+                            (i == 1),
+                            (i == 1) ? "WHEAT" : null,
+                            "BALANCED",
+                            1.0, 1.0, 1.0
+                    );
+                    repository.savePlot(plot);
+                    initialPlots.add(plot);
+                }
+                plotsByIsland.put(islandId, initialPlots);
+                return Collections.unmodifiableList(initialPlots);
+            }
             plotsByIsland.put(islandId, new ArrayList<>(fromDb));
             return Collections.unmodifiableList(fromDb);
         } catch (SQLException e) {

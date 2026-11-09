@@ -176,7 +176,7 @@ public final class FarmingModule implements SkyModule {
         Bukkit.getPluginManager().registerEvents(new FarmingGui(farmingService, FarmingGui.GuiType.MAIN_MENU, net.kyori.adventure.text.Component.empty(), null), plugin);
 
         // 5. Register /garden and /farm commands via DynamicCommandRegistrar
-        GardenCommand gardenCommand = new GardenCommand(gardenService, islandService, offeringService, masteryService, questService);
+        GardenCommand gardenCommand = new GardenCommand(gardenService, islandService, offeringService, masteryService, questService, elarionService);
         DynamicCommandRegistrar.register(
                 "skyrealms",
                 "garden",

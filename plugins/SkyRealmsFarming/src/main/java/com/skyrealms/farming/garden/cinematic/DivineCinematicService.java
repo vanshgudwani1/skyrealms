@@ -83,8 +83,8 @@ public final class DivineCinematicService {
         // 2. Spawn Divine Emissary entity hovering 6 blocks above chest
         Location spawnLoc = chestLoc.clone().add(0.5, 6.0, 0.5);
         Allay emissary = (Allay) world.spawnEntity(spawnLoc, EntityType.ALLAY);
-        emissary.customName(Component.text("✦ Divine Emissary of the Harvest ✦", NamedTextColor.GOLD, TextDecoration.BOLD));
-        emissary.setCustomNameVisible(true);
+        emissary.customName(Component.text("Celestial Emissary", NamedTextColor.GOLD));
+        emissary.setCustomNameVisible(false); // Keep name invisible so it does not block the player's view
         emissary.setGlowing(true);
         emissary.setInvulnerable(true);
         emissary.setAI(false);
@@ -111,31 +111,31 @@ public final class DivineCinematicService {
                 }
 
                 // Radiant golden particle vortex
-                world.spawnParticle(Particle.TOTEM_OF_UNDYING, emissary.getLocation(), 12, 0.4, 0.4, 0.4, 0.05);
-                world.spawnParticle(Particle.HAPPY_VILLAGER, emissary.getLocation(), 6, 0.3, 0.3, 0.3, 0.02);
+                world.spawnParticle(Particle.TOTEM_OF_UNDYING, emissary.getLocation(), 10, 0.3, 0.3, 0.3, 0.05);
+                world.spawnParticle(Particle.HAPPY_VILLAGER, emissary.getLocation(), 5, 0.2, 0.2, 0.2, 0.02);
 
-                // Dialogue and title milestones
+                // Dialogue and title milestones (crisp, compact, non-obtrusive)
                 if (ticks == 20) {
                     Title title1 = Title.title(
-                            Component.text("✦ THE HEAVENS OPEN ✦", NamedTextColor.GOLD, TextDecoration.BOLD),
-                            Component.text("The Gods have sensed your humble tribute...", NamedTextColor.YELLOW),
-                            Title.Times.times(Duration.ofMillis(300), Duration.ofMillis(2000), Duration.ofMillis(500))
+                            Component.empty(),
+                            Component.text("The heavens tremble with celestial light...", NamedTextColor.GOLD),
+                            Title.Times.times(Duration.ofMillis(150), Duration.ofMillis(1200), Duration.ofMillis(300))
                     );
                     player.showTitle(title1);
                     player.playSound(chestLoc, Sound.BLOCK_BEACON_POWER_SELECT, 1.5f, 1.2f);
                 } else if (ticks == 60) {
                     Title title2 = Title.title(
-                            Component.text("✦ THE DIVINE VOICE ✦", NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD),
-                            Component.text("Mortals of SkyRealms... Your offering has pleased the Gods!", NamedTextColor.WHITE),
-                            Title.Times.times(Duration.ofMillis(300), Duration.ofMillis(2000), Duration.ofMillis(500))
+                            Component.text("DIVINE BLESSING", NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD),
+                            Component.text("Your sacred tribute has pleased the Gods!", NamedTextColor.WHITE),
+                            Title.Times.times(Duration.ofMillis(150), Duration.ofMillis(1400), Duration.ofMillis(300))
                     );
                     player.showTitle(title2);
                     player.playSound(chestLoc, Sound.ENTITY_PLAYER_LEVELUP, 1.5f, 0.7f);
                 } else if (ticks == 100) {
                     Title title3 = Title.title(
-                            Component.text("🌸 SAKURA GARDEN UNLOCKED 🌸", NamedTextColor.GREEN, TextDecoration.BOLD),
-                            Component.text("The gates to the Sakura Glass Garden are now forever open!", NamedTextColor.GOLD),
-                            Title.Times.times(Duration.ofMillis(300), Duration.ofMillis(3000), Duration.ofMillis(1000))
+                            Component.text("GARDEN UNLOCKED", NamedTextColor.GREEN, TextDecoration.BOLD),
+                            Component.text("Use /garden to enter your sanctuary", NamedTextColor.YELLOW),
+                            Title.Times.times(Duration.ofMillis(150), Duration.ofMillis(2000), Duration.ofMillis(400))
                     );
                     player.showTitle(title3);
                     player.playSound(chestLoc, Sound.UI_TOAST_CHALLENGE_COMPLETE, 2.0f, 1.0f);
@@ -171,17 +171,17 @@ public final class DivineCinematicService {
             Optional<Island> optIsland = islandService.getIsland(islandId);
             if (optIsland.isPresent()) {
                 Island island = optIsland.get();
-                Component msg = Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.LIGHT_PURPLE, TextDecoration.STRIKETHROUGH)
+                Component msg = Component.text("---------------------------------------------", NamedTextColor.LIGHT_PURPLE)
                         .append(Component.newline())
-                        .append(Component.text("🌸 SkyRealms Garden Unlocked! 🌸", NamedTextColor.GREEN, TextDecoration.BOLD))
+                        .append(Component.text("✦ SkyRealms Garden Unlocked! ✦", NamedTextColor.GREEN, TextDecoration.BOLD))
                         .append(Component.newline())
-                        .append(Component.text("Your island has earned the blessing of the Gods! Permanent access to the Sakura Glass Garden is now unlocked.", NamedTextColor.YELLOW))
+                        .append(Component.text("Your island has earned the blessing of the Gods! Permanent access to the Sakura Conservatory is now unlocked.", NamedTextColor.YELLOW))
                         .append(Component.newline())
                         .append(Component.text("Use ", NamedTextColor.GRAY))
                         .append(Component.text("/garden", NamedTextColor.GOLD, TextDecoration.BOLD))
                         .append(Component.text(" to enter your Garden sanctuary.", NamedTextColor.GRAY))
                         .append(Component.newline())
-                        .append(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.LIGHT_PURPLE, TextDecoration.STRIKETHROUGH));
+                        .append(Component.text("---------------------------------------------", NamedTextColor.LIGHT_PURPLE));
 
                 for (UUID memberUuid : island.members().keySet()) {
                     Player p = Bukkit.getPlayer(memberUuid);

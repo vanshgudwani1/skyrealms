@@ -41,6 +41,11 @@ public interface FarmingQuestService {
      */
     void recordHarvest(@NotNull Player player, @NotNull String cropType);
 
+    /**
+     * Resets a player's quest progress.
+     */
+    void resetQuest(@NotNull UUID playerUuid, @NotNull String questId);
+
     record FarmingQuestProgress(
             UUID playerUuid,
             String questId,

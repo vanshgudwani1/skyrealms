@@ -40,4 +40,9 @@ public interface OfferingService {
      * Checks if an island has already completed the divine offering and unlocked Garden access.
      */
     boolean isGardenUnlocked(@NotNull UUID islandId);
+
+    /**
+     * Resets divine offering and garden unlock state for an island, requiring the ritual to be completed again.
+     */
+    void resetOfferingAndUnlock(@NotNull UUID islandId);
 }

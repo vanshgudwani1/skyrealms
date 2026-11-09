@@ -867,4 +867,29 @@ public final class FarmingRepository {
             ps.executeUpdate();
         }
     }
+
+    public void deleteOfferingAndUnlock(@NotNull UUID islandId) throws SQLException {
+        String delOffering = "DELETE FROM sr_garden_offerings WHERE island_id = ?";
+        String delUnlock = "DELETE FROM sr_garden_unlocks WHERE island_id = ?";
+        try (Connection conn = databaseService.getConnection()) {
+            try (PreparedStatement ps = conn.prepareStatement(delOffering)) {
+                ps.setObject(1, islandId);
+                ps.executeUpdate();
+            }
+            try (PreparedStatement ps = conn.prepareStatement(delUnlock)) {
+                ps.setObject(1, islandId);
+                ps.executeUpdate();
+            }
+        }
+    }
+
+    public void deleteQuestProgress(@NotNull UUID playerUuid, @NotNull String questId) throws SQLException {
+        String sql = "DELETE FROM sr_farming_quests WHERE player_uuid = ? AND quest_id = ?";
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, playerUuid);
+            ps.setString(2, questId);
+            ps.executeUpdate();
+        }
+    }
 }

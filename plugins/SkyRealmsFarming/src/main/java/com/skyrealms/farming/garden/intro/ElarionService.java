@@ -63,6 +63,16 @@ public final class ElarionService {
         }
     }
 
+    public void resetIntro(@NotNull UUID playerUuid) {
+        introCompletedCache.remove(playerUuid);
+        try {
+            repository.setElarionIntroCompleted(playerUuid, false);
+            logger.info("Reset Elarion introduction for player " + playerUuid);
+        } catch (SQLException e) {
+            logger.warning("Failed to reset Elarion intro for player " + playerUuid + ": " + e.getMessage());
+        }
+    }
+
     public void triggerIntro(@NotNull Player player) {
         UUID uuid = player.getUniqueId();
         if (hasCompletedIntro(uuid)) {
@@ -79,12 +89,12 @@ public final class ElarionService {
             }
         });
 
-        // 1. Play Welcome Sound & Title
+        // 1. Play Welcome Sound & Title (compact & clean)
         player.playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 1.5f, 1.2f);
         Title title = Title.title(
-                Component.text("🌸 WELCOME TO THE GARDEN 🌸", TextColor.fromHexString("#FFB7C5"), TextDecoration.BOLD),
+                Component.text("GARDEN CONSERVATORY", TextColor.fromHexString("#FFB7C5"), TextDecoration.BOLD),
                 Component.text("Elarion the Botanist approaches you...", NamedTextColor.WHITE),
-                Title.Times.times(Duration.ofMillis(300), Duration.ofMillis(2500), Duration.ofMillis(800))
+                Title.Times.times(Duration.ofMillis(200), Duration.ofMillis(1800), Duration.ofMillis(400))
         );
         player.showTitle(title);
 
@@ -100,39 +110,39 @@ public final class ElarionService {
         // 3. Start First Harvest Quest
         questService.startQuest(uuid, FarmingQuestService.QUEST_FIRST_HARVEST);
 
-        // 4. Send Rich Tutorial Dialogue
+        // 4. Send Rich Tutorial Dialogue (clean vanilla-friendly formatting)
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            Component dialogue = Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.LIGHT_PURPLE, TextDecoration.STRIKETHROUGH)
+            Component dialogue = Component.text("---------------------------------------------", NamedTextColor.LIGHT_PURPLE)
                     .append(Component.newline())
-                    .append(Component.text("🌸 Elarion: ", NamedTextColor.GOLD, TextDecoration.BOLD))
-                    .append(Component.text("\"Greetings, traveler! Welcome beneath the glass dome of our Sakura Sanctuary.\"", NamedTextColor.WHITE))
+                    .append(Component.text("[Elarion] ", NamedTextColor.GOLD, TextDecoration.BOLD))
+                    .append(Component.text("\"Welcome beneath the glass dome of our Botanical Conservatory!\"", NamedTextColor.WHITE))
                     .append(Component.newline())
                     .append(Component.newline())
-                    .append(Component.text("Here is how your agricultural journey begins:", NamedTextColor.YELLOW))
+                    .append(Component.text("How to progress your agricultural sanctuary:", NamedTextColor.YELLOW))
                     .append(Component.newline())
-                    .append(Component.text("  1. ", NamedTextColor.GRAY)).append(Component.text("16 Garden Plots: ", NamedTextColor.GREEN, TextDecoration.BOLD))
-                    .append(Component.text("Each plot is a 64x64 zone reserved for your crops.", NamedTextColor.GRAY))
+                    .append(Component.text("  1. ", NamedTextColor.GRAY)).append(Component.text("16 Crop Plots: ", NamedTextColor.GREEN, TextDecoration.BOLD))
+                    .append(Component.text("Each plot is a 64x64 zone for your crops.", NamedTextColor.GRAY))
                     .append(Component.newline())
                     .append(Component.text("  2. ", NamedTextColor.GRAY)).append(Component.text("Natural Farming: ", NamedTextColor.AQUA, TextDecoration.BOLD))
-                    .append(Component.text("Right-click mature crops to fast-harvest and auto-replant!", NamedTextColor.GRAY))
+                    .append(Component.text("Right-click mature crops to fast-harvest & auto-replant!", NamedTextColor.GRAY))
                     .append(Component.newline())
-                    .append(Component.text("  3. ", NamedTextColor.GRAY)).append(Component.text("Progression & Mastery: ", NamedTextColor.GOLD, TextDecoration.BOLD))
-                    .append(Component.text("Harvests yield Farming XP, Collections, and Crop Mastery.", NamedTextColor.GRAY))
-                    .append(Component.newline())
-                    .append(Component.newline())
-                    .append(Component.text("🎁 Starter Supplies Received:", NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD))
-                    .append(Component.newline())
-                    .append(Component.text("  • 1x Novice Cultivator Hoe (Quick Till & Moisture Retention)", NamedTextColor.GREEN))
-                    .append(Component.newline())
-                    .append(Component.text("  • 16x Wheat Seeds", NamedTextColor.YELLOW))
-                    .append(Component.newline())
-                    .append(Component.text("  • 8x Bone Meal", NamedTextColor.WHITE))
+                    .append(Component.text("  3. ", NamedTextColor.GRAY)).append(Component.text("Crop Mastery: ", NamedTextColor.GOLD, TextDecoration.BOLD))
+                    .append(Component.text("Harvests level up your crop mastery and double drop perks.", NamedTextColor.GRAY))
                     .append(Component.newline())
                     .append(Component.newline())
-                    .append(Component.text("📜 Active Quest: ", NamedTextColor.GOLD, TextDecoration.BOLD))
-                    .append(Component.text("First Harvest (Till 16, Plant 16, Harvest 16 wheat)", NamedTextColor.YELLOW))
+                    .append(Component.text("◆ Starter Supplies Received:", NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD))
                     .append(Component.newline())
-                    .append(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.LIGHT_PURPLE, TextDecoration.STRIKETHROUGH));
+                    .append(Component.text("  - 1x Novice Cultivator Hoe", NamedTextColor.GREEN))
+                    .append(Component.newline())
+                    .append(Component.text("  - 16x Wheat Seeds", NamedTextColor.YELLOW))
+                    .append(Component.newline())
+                    .append(Component.text("  - 8x Bone Meal", NamedTextColor.WHITE))
+                    .append(Component.newline())
+                    .append(Component.newline())
+                    .append(Component.text("◆ Active Quest: ", NamedTextColor.GOLD, TextDecoration.BOLD))
+                    .append(Component.text("First Harvest (/garden quest)", NamedTextColor.YELLOW))
+                    .append(Component.newline())
+                    .append(Component.text("---------------------------------------------", NamedTextColor.LIGHT_PURPLE));
 
             player.sendMessage(dialogue);
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_YES, 1.0f, 1.0f);

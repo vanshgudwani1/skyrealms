@@ -14,6 +14,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -35,19 +36,22 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
     private final OfferingService offeringService;
     private final CropMasteryService masteryService;
     private final FarmingQuestService questService;
+    private final com.skyrealms.farming.garden.intro.ElarionService elarionService;
 
     public GardenCommand(
             @NotNull GardenService gardenService,
             @NotNull IslandService islandService,
             @NotNull OfferingService offeringService,
             @NotNull CropMasteryService masteryService,
-            @NotNull FarmingQuestService questService
+            @NotNull FarmingQuestService questService,
+            @NotNull com.skyrealms.farming.garden.intro.ElarionService elarionService
     ) {
         this.gardenService = Objects.requireNonNull(gardenService, "gardenService cannot be null");
         this.islandService = Objects.requireNonNull(islandService, "islandService cannot be null");
         this.offeringService = Objects.requireNonNull(offeringService, "offeringService cannot be null");
         this.masteryService = Objects.requireNonNull(masteryService, "masteryService cannot be null");
         this.questService = Objects.requireNonNull(questService, "questService cannot be null");
+        this.elarionService = Objects.requireNonNull(elarionService, "elarionService cannot be null");
     }
 
     @Override
@@ -86,22 +90,22 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendHelp(@NotNull CommandSender sender) {
-        sender.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.GREEN, TextDecoration.STRIKETHROUGH));
-        sender.sendMessage(Component.text("🌸 SkyRealms Garden Commands", NamedTextColor.GOLD, TextDecoration.BOLD));
-        sender.sendMessage(Component.text("/garden home ", NamedTextColor.YELLOW).append(Component.text("— Teleport to your Greenhouse Dome", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/garden leave ", NamedTextColor.YELLOW).append(Component.text("— Teleport back to your Island Home", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/garden mastery ", NamedTextColor.YELLOW).append(Component.text("— Open 10-crop Mastery progression GUI", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/garden quest ", NamedTextColor.YELLOW).append(Component.text("— View First Harvest quest objectives", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/garden info ", NamedTextColor.YELLOW).append(Component.text("— View your Garden coordinates & status", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/garden plots ", NamedTextColor.YELLOW).append(Component.text("— View status of all 16 Crop Plots", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/garden help ", NamedTextColor.YELLOW).append(Component.text("— Display this command guide", NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.GREEN, TextDecoration.STRIKETHROUGH));
+        sender.sendMessage(Component.text("---------------------------------------------", NamedTextColor.GREEN));
+        sender.sendMessage(Component.text("✦ SkyRealms Garden Commands ✦", NamedTextColor.GOLD, TextDecoration.BOLD));
+        sender.sendMessage(Component.text("/garden home ", NamedTextColor.YELLOW).append(Component.text("- Teleport to your Greenhouse Dome", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/garden leave ", NamedTextColor.YELLOW).append(Component.text("- Teleport back to your Island Home", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/garden mastery ", NamedTextColor.YELLOW).append(Component.text("- Open 10-crop Mastery progression GUI", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/garden quest ", NamedTextColor.YELLOW).append(Component.text("- View First Harvest quest objectives", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/garden info ", NamedTextColor.YELLOW).append(Component.text("- View your Garden coordinates & status", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/garden plots ", NamedTextColor.YELLOW).append(Component.text("- View status of all 16 Crop Plots", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/garden help ", NamedTextColor.YELLOW).append(Component.text("- Display this command guide", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("---------------------------------------------", NamedTextColor.GREEN));
     }
 
     private void handleHome(@NotNull Player player) {
         Optional<Island> optIsland = islandService.getIslandByPlayer(player.getUniqueId());
         if (optIsland.isEmpty()) {
-            player.sendMessage(Component.text("✖ You must belong to an island to access a Garden. Create one with /is create.", NamedTextColor.RED));
+            player.sendMessage(Component.text("[✗] You must belong to an island to access a Garden. Create one with /is create.", NamedTextColor.RED));
             return;
         }
 
@@ -109,9 +113,9 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
 
         // Check if the Garden is unlocked via Offering
         if (!offeringService.isGardenUnlocked(islandId)) {
-            player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.LIGHT_PURPLE, TextDecoration.STRIKETHROUGH));
+            player.sendMessage(Component.text("---------------------------------------------", NamedTextColor.LIGHT_PURPLE));
             player.sendMessage(Component.text("✦ THE GARDEN IS LOCKED BY THE GODS ✦", NamedTextColor.GOLD, TextDecoration.BOLD));
-            player.sendMessage(Component.text("To gain permanent access to the Sakura Glass Garden, your island must make an offering:", NamedTextColor.YELLOW));
+            player.sendMessage(Component.text("To gain permanent access to the Sakura Conservatory, your island must make an offering:", NamedTextColor.YELLOW));
             player.sendMessage(Component.empty());
             player.sendMessage(Component.text("  • 3x Enchanted Hay Bales", NamedTextColor.WHITE));
             player.sendMessage(Component.text("  • 3x Enchanted Carrots", NamedTextColor.WHITE));
@@ -120,22 +124,22 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(Component.text("Place these items inside a chest renamed: ", NamedTextColor.GRAY)
                     .append(Component.text("Offering to the Gods", NamedTextColor.GOLD, TextDecoration.BOLD)));
             player.sendMessage(Component.text("on your island to initiate the divine ritual.", NamedTextColor.GRAY));
-            player.sendMessage(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.LIGHT_PURPLE, TextDecoration.STRIKETHROUGH));
+            player.sendMessage(Component.text("---------------------------------------------", NamedTextColor.LIGHT_PURPLE));
             return;
         }
 
-        player.sendMessage(Component.text("🌿 Initiating teleport to your SkyRealms Greenhouse Garden...", TextColor.fromHexString("#77DD77")));
+        player.sendMessage(Component.text("◆ Teleporting to your Greenhouse Conservatory...", TextColor.fromHexString("#77DD77")));
         gardenService.teleportToGarden(player, islandId);
     }
 
     private void handleLeave(@NotNull Player player) {
         Optional<Island> optIsland = islandService.getIslandByPlayer(player.getUniqueId());
         if (optIsland.isEmpty()) {
-            player.sendMessage(Component.text("✖ You do not belong to an island.", NamedTextColor.RED));
+            player.sendMessage(Component.text("[✗] You do not belong to an island.", NamedTextColor.RED));
             return;
         }
 
-        player.sendMessage(Component.text("🌸 Returning to your Island Home...", TextColor.fromHexString("#FF77A8")));
+        player.sendMessage(Component.text("◆ Returning to your Island Home...", TextColor.fromHexString("#FF77A8")));
         gardenService.teleportToIsland(player, optIsland.get().id());
     }
 
@@ -147,9 +151,9 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
         }
 
         FarmingQuestService.FarmingQuestProgress q = opt.get();
-        player.sendMessage(Component.text("────────── [ Quest: First Harvest ] ──────────", NamedTextColor.GOLD));
+        player.sendMessage(Component.text("---------------- [ Quest: First Harvest ] ----------------", NamedTextColor.GOLD));
         player.sendMessage(Component.text("Status: ", NamedTextColor.GRAY)
-                .append(Component.text(q.isCompleted() ? "COMPLETED ✔" : "IN PROGRESS...", q.isCompleted() ? NamedTextColor.GREEN : NamedTextColor.YELLOW, TextDecoration.BOLD)));
+                .append(Component.text(q.isCompleted() ? "COMPLETED [✓]" : "IN PROGRESS...", q.isCompleted() ? NamedTextColor.GREEN : NamedTextColor.YELLOW, TextDecoration.BOLD)));
         player.sendMessage(Component.text("1. Till Farmland: ", NamedTextColor.WHITE)
                 .append(Component.text(Math.min(16, q.tilledCount()) + " / 16", NamedTextColor.AQUA)));
         player.sendMessage(Component.text("2. Plant Wheat: ", NamedTextColor.WHITE)
@@ -158,7 +162,7 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
                 .append(Component.text(Math.min(16, q.harvestedCount()) + " / 16", NamedTextColor.AQUA)));
         player.sendMessage(Component.text("Rewards: ", NamedTextColor.GRAY)
                 .append(Component.text("+500 Farming XP, +2,500 Coins, 16x Carrots", NamedTextColor.YELLOW)));
-        player.sendMessage(Component.text("─────────────────────────────────────────", NamedTextColor.GOLD));
+        player.sendMessage(Component.text("----------------------------------------------------------", NamedTextColor.GOLD));
     }
 
     private void handleInfo(@NotNull Player player) {
@@ -236,12 +240,61 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length < 2) {
-            sender.sendMessage(Component.text("Admin usage: /garden admin tp <player> | unlockplot <player> <1-16> | giveitem <player> <hay|carrot|cane|hoe> [amount]", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Admin usage: /garden admin tp <player> | reset <player> | unlockplot <player> <1-16> | giveitem <player> <hay|carrot|cane|hoe|seeds|bonemeal> [amount]", NamedTextColor.RED));
             return;
         }
 
         String adminSub = args[1].toLowerCase(Locale.ROOT);
-        if (adminSub.equals("tp")) {
+        if (adminSub.equals("reset")) {
+            if (args.length < 3) {
+                sender.sendMessage(Component.text("Usage: /garden admin reset <player>", NamedTextColor.RED));
+                return;
+            }
+            Player target = Bukkit.getPlayer(args[2]);
+            UUID targetUuid = target != null ? target.getUniqueId() : null;
+            String targetName = args[2];
+            if (targetUuid == null) {
+                try {
+                    targetUuid = Bukkit.getOfflinePlayer(args[2]).getUniqueId();
+                } catch (Exception ignored) {}
+            }
+            if (targetUuid == null) {
+                sender.sendMessage(Component.text("Could not find player: " + args[2], NamedTextColor.RED));
+                return;
+            }
+
+            Optional<Island> optIsland = islandService.getIslandByPlayer(targetUuid);
+            if (optIsland.isEmpty()) {
+                sender.sendMessage(Component.text("Player " + targetName + " does not belong to an island.", NamedTextColor.RED));
+                return;
+            }
+
+            UUID islandId = optIsland.get().id();
+
+            // 1. Reset Offering & Garden Unlock state
+            offeringService.resetOfferingAndUnlock(islandId);
+
+            // 2. Reset Elarion Intro
+            elarionService.resetIntro(targetUuid);
+
+            // 3. Reset First Harvest quest
+            questService.resetQuest(targetUuid, FarmingQuestService.QUEST_FIRST_HARVEST);
+
+            // 4. Teleport back to island if player is currently in Garden world
+            if (target != null && target.isOnline() && gardenService.isGardenWorld(target.getWorld())) {
+                gardenService.teleportToIsland(target, islandId);
+            }
+
+            sender.sendMessage(Component.text("[✓] Successfully reset Garden unlock, offering ritual, intro, and quests for " + targetName + ".", NamedTextColor.GREEN));
+            sender.sendMessage(Component.text("They must complete the Divine Offering ritual again to access the Garden.", NamedTextColor.YELLOW));
+            if (target != null && target.isOnline()) {
+                target.sendMessage(Component.text("---------------------------------------------", NamedTextColor.RED));
+                target.sendMessage(Component.text("✦ GARDEN ACCESS RESET ✦", NamedTextColor.RED, TextDecoration.BOLD));
+                target.sendMessage(Component.text("An administrator has reset your Garden access.", NamedTextColor.WHITE));
+                target.sendMessage(Component.text("You must present the Divine Offering to the Gods again to unlock the Conservatory.", NamedTextColor.YELLOW));
+                target.sendMessage(Component.text("---------------------------------------------", NamedTextColor.RED));
+            }
+        } else if (adminSub.equals("tp")) {
             if (!(sender instanceof Player admin)) {
                 sender.sendMessage(Component.text("Only players can teleport.", NamedTextColor.RED));
                 return;
@@ -284,16 +337,18 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
                 case "carrot" -> GardenItemFactory.createEnchantedCarrot(amount);
                 case "cane" -> GardenItemFactory.createEnchantedSugarCane(amount);
                 case "hoe" -> GardenItemFactory.createNoviceHoe();
+                case "seeds" -> new ItemStack(Material.WHEAT_SEEDS, amount);
+                case "bonemeal" -> new ItemStack(Material.BONE_MEAL, amount);
                 default -> null;
             };
 
             if (item == null) {
-                sender.sendMessage(Component.text("Invalid item type. Options: hay, carrot, cane, hoe", NamedTextColor.RED));
+                sender.sendMessage(Component.text("Invalid item type. Options: hay, carrot, cane, hoe, seeds, bonemeal", NamedTextColor.RED));
                 return;
             }
 
             target.getInventory().addItem(item);
-            sender.sendMessage(Component.text("✔ Gave " + amount + "x " + itemType + " to " + target.getName(), NamedTextColor.GREEN));
+            sender.sendMessage(Component.text("[✓] Gave " + amount + "x " + itemType + " to " + target.getName(), NamedTextColor.GREEN));
         } else if (adminSub.equals("unlockplot")) {
             if (args.length < 4) {
                 sender.sendMessage(Component.text("Usage: /garden admin unlockplot <player> <1-16>", NamedTextColor.RED));
@@ -318,7 +373,7 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
             }
             gardenService.unlockPlot(opt.get().id(), plotIdx).thenAccept(success -> {
                 if (success) {
-                    sender.sendMessage(Component.text("✔ Unlocked plot #" + plotIdx + " for " + target.getName() + "'s garden.", NamedTextColor.GREEN));
+                    sender.sendMessage(Component.text("[✓] Unlocked plot #" + plotIdx + " for " + target.getName() + "'s garden.", NamedTextColor.GREEN));
                 } else {
                     sender.sendMessage(Component.text("✖ Could not unlock plot (invalid or already unlocked).", NamedTextColor.RED));
                 }
@@ -341,7 +396,7 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
             return subs;
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("admin")) {
-            return List.of("tp", "unlockplot", "giveitem");
+            return List.of("tp", "reset", "unlockplot", "giveitem");
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("admin")) {
             List<String> names = new ArrayList<>();
@@ -351,7 +406,7 @@ public final class GardenCommand implements CommandExecutor, TabCompleter {
             return names;
         }
         if (args.length == 4 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("giveitem")) {
-            return List.of("hay", "carrot", "cane", "hoe");
+            return List.of("hay", "carrot", "cane", "hoe", "seeds", "bonemeal");
         }
         return List.of();
     }

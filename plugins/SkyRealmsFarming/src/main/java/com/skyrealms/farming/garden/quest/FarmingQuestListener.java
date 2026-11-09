@@ -68,7 +68,10 @@ public final class FarmingQuestListener implements Listener {
 
         if (isTillable(clicked.getType())) {
             Optional<GardenPlot> optPlot = gardenService.getPlotAt(clicked.getLocation());
-            if (optPlot.isPresent() && optPlot.get().unlocked()) {
+            boolean unlocked = optPlot.map(GardenPlot::unlocked).orElseGet(() ->
+                    gardenService.getGardenAt(clicked.getLocation()).isPresent()
+            );
+            if (unlocked) {
                 questService.recordTill(player);
             }
         }
@@ -82,7 +85,10 @@ public final class FarmingQuestListener implements Listener {
         Material mat = placed.getType();
         if (mat == Material.WHEAT) {
             Optional<GardenPlot> optPlot = gardenService.getPlotAt(placed.getLocation());
-            if (optPlot.isPresent() && optPlot.get().unlocked()) {
+            boolean unlocked = optPlot.map(GardenPlot::unlocked).orElseGet(() ->
+                    gardenService.getGardenAt(placed.getLocation()).isPresent()
+            );
+            if (unlocked) {
                 questService.recordPlant(event.getPlayer(), mat);
             }
         }

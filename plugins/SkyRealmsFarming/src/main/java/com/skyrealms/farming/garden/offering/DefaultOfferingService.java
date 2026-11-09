@@ -100,6 +100,17 @@ public final class DefaultOfferingService implements OfferingService {
     }
 
     @Override
+    public void resetOfferingAndUnlock(@NotNull UUID islandId) {
+        unlockCache.remove(islandId);
+        try {
+            repository.deleteOfferingAndUnlock(islandId);
+            logger.info("Reset offering and unlock state for island " + islandId);
+        } catch (SQLException e) {
+            logger.severe("Failed to reset offering and unlock for island " + islandId + ": " + e.getMessage());
+        }
+    }
+
+    @Override
     @NotNull
     public CompletableFuture<Boolean> processOffering(@NotNull Player player, @NotNull Block chestBlock, @NotNull UUID islandId) {
         // 1. Concurrency Mutex: Prevent simultaneous submissions on the same island

@@ -113,16 +113,16 @@ public final class DefaultCropMasteryService implements CropMasteryService {
         player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.2f, 1.1f);
 
         Title title = Title.title(
-                Component.text("✦ MASTERY LEVEL UP! ✦", TextColor.fromHexString("#77DD77"), TextDecoration.BOLD),
+                Component.text("MASTERY LEVEL UP!", TextColor.fromHexString("#77DD77"), TextDecoration.BOLD),
                 Component.text(crop.displayName() + " Mastery Level " + newLevel + " / 30", NamedTextColor.GOLD),
-                Title.Times.times(Duration.ofMillis(300), Duration.ofMillis(2500), Duration.ofMillis(800))
+                Title.Times.times(Duration.ofMillis(200), Duration.ofMillis(1800), Duration.ofMillis(400))
         );
         player.showTitle(title);
 
-        Component levelMsg = Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.LIGHT_PURPLE, TextDecoration.STRIKETHROUGH)
+        Component levelMsg = Component.text("---------------------------------------------", NamedTextColor.DARK_GRAY)
                 .append(Component.newline())
-                .append(Component.text("🌟 CROP MASTERY LEVEL UP! ", NamedTextColor.GREEN, TextDecoration.BOLD))
-                .append(Component.text("[" + crop.displayName() + " " + oldLevel + " ➜ " + newLevel + "]", NamedTextColor.YELLOW))
+                .append(Component.text("✦ CROP MASTERY LEVEL UP! ", NamedTextColor.GREEN, TextDecoration.BOLD))
+                .append(Component.text("[" + crop.displayName() + " " + oldLevel + " -> " + newLevel + "]", NamedTextColor.YELLOW))
                 .append(Component.newline())
                 .append(Component.text("Current Double Drop Bonus: ", NamedTextColor.GRAY))
                 .append(Component.text(String.format("+%.1f%%", mastery.getTotalDoubleDropBonus() * 100.0), NamedTextColor.AQUA, TextDecoration.BOLD));
@@ -135,7 +135,7 @@ public final class DefaultCropMasteryService implements CropMasteryService {
         }
 
         levelMsg = levelMsg.append(Component.newline())
-                .append(Component.text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", NamedTextColor.LIGHT_PURPLE, TextDecoration.STRIKETHROUGH));
+                .append(Component.text("---------------------------------------------", NamedTextColor.DARK_GRAY));
 
         player.sendMessage(levelMsg);
     }
@@ -172,7 +172,7 @@ public final class DefaultCropMasteryService implements CropMasteryService {
         }
 
         player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.2f, 1.2f);
-        player.sendMessage(Component.text("🏆 Milestone Unlocked: ", NamedTextColor.GOLD, TextDecoration.BOLD)
+        player.sendMessage(Component.text("[!] Milestone Unlocked: ", NamedTextColor.GOLD, TextDecoration.BOLD)
                 .append(Component.text(targetMilestone.title() + " (Level " + milestoneLevel + ")! ", NamedTextColor.YELLOW))
                 .append(Component.text(targetMilestone.description() + " [+" + bonusCoins + " Coins]", NamedTextColor.AQUA)));
 
