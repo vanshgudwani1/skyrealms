@@ -1,0 +1,103 @@
+# ==============================================================================
+# SkyRealms <-> TAB & PlaceholderAPI Integration Manifest
+# Maintained alongside plugins/TAB/config.yml and SkyRealmsPlaceholders-1.0.0.jar
+# ==============================================================================
+
+integration:
+  tab_plugin: "TAB v6.2.1 (NEZNAMY)"
+  placeholderapi_plugin: "PlaceholderAPI v2.12.3"
+  luckperms_plugin: "LuckPerms v5.5.71 (H2 storage, Vault hook)"
+  expansion_plugin: "SkyRealmsPlaceholders v1.0.0"
+  expansion_identifier: "skyrealms"
+  disabled_conflicting_plugin: "SimpleScore v4.3.1 (config backed up to backups/simplescore-backup/)"
+
+worlds:
+  hub:
+    world_names:
+      - world
+      - skyrealms_arrival
+    scoreboard: hub
+    header_footer_design: hub
+    theme: "Fantasy MMORPG (Purple, Cyan, White, Gold)"
+  garden:
+    world_names:
+      - skyrealms_garden
+    scoreboard: garden
+    header_footer_design: garden
+    theme: "Cherry Blossom Garden (Pink, Pastel Green, White, Gold)"
+  island:
+    world_names:
+      - skyrealms_islands
+    scoreboard: island
+    header_footer_design: island
+    theme: "Floating Islands (Deep Blue, Cyan, White, Gold)"
+
+placeholders:
+  implemented_cached:
+    - key: "%skyrealms_farming_level%"
+      source: "McMMOFarmingService.getFarmingLevel(player)"
+    - key: "%skyrealms_farming_xp%"
+      source: "McMMOFarmingService.getFarmingXp(player)"
+    - key: "%skyrealms_farming_xp_next%"
+      source: "McMMOFarmingService.getFarmingXpToNextLevel(player)"
+    - key: "%skyrealms_farming_xp_percent%"
+      source: "McMMOFarmingService.getProgressToNextLevel(player) * 100"
+    - key: "%skyrealms_farming_xp_bar%"
+      source: "10-segment color progress bar from getProgressToNextLevel(player)"
+    - key: "%skyrealms_farming_fortune%"
+      source: "CustomItemStatProvider.getPlayerEquippedStats + PetStatProvider.getActivePetStats"
+    - key: "%skyrealms_current_tool%"
+      source: "Player main-hand display name / custom item id / humanized Material"
+    - key: "%skyrealms_garden_unlocked%"
+      source: "GardenService.getGardenAt/ByPlayer -> unlocked()"
+    - key: "%skyrealms_garden_plots_unlocked%"
+      source: "GardenService.getPlots(islandId) -> count(unlocked)"
+    - key: "%skyrealms_garden_plots_total%"
+      source: "GardenService.getPlots(islandId).size() (default 16)"
+    - key: "%skyrealms_garden_visitors%"
+      source: "Live count of online non-members inside Garden region bounds"
+    - key: "%skyrealms_garden_event%"
+      source: "GardenAbilityService.isSurgeActive(uuid) -> 'Sakura Surge' or 'None'"
+    - key: "%skyrealms_island_level%"
+      source: "IslandService.getIslandAt/ByPlayer -> level()"
+    - key: "%skyrealms_island_rank%"
+      source: "Computed rank across IslandService.getAllActiveIslands() descending by level()"
+    - key: "%skyrealms_island_owner%"
+      source: "Cached username lookup for island.ownerUuid()"
+    - key: "%skyrealms_island_members%"
+      source: "island.members().size()"
+    - key: "%skyrealms_island_visitors%"
+      source: "Live count of online non-members inside island.location().contains(...)"
+    - key: "%skyrealms_island_name%"
+      source: "island.name()"
+    - key: "%skyrealms_coins%"
+      source: "EconomyService.getCachedBalance(uuid, 'coins') for online players"
+    - key: "%skyrealms_gems%"
+      source: "EconomyService.getCachedBalance(uuid, 'gems') for online players"
+    - key: "%skyrealms_rank%"
+      source: "Vault Permission.getPrimaryGroup(player) backed by LuckPerms"
+    - key: "%skyrealms_location%"
+      source: "Mapped readable realm name from Bukkit world name"
+    - key: "%skyrealms_max_players%"
+      source: "Bukkit.getMaxPlayers() slot cap"
+  partial_or_not_yet_implemented_in_skyrealms:
+    - key: "%skyrealms_garden_level%"
+      current_output: "N/A"
+      reason: "SkyRealmsFarming Garden model currently tracks unlock status and 16 plots rather than a separate Garden tier/level."
+    - key: "%skyrealms_profile%"
+      current_output: "Solo"
+      reason: "SkyRealmsPlayer stores one PlayerProfile per UUID rather than multiple profile slots."
+    - key: "%skyrealms_combat_level%"
+      current_output: "Live mcMMO max(Swords, Axes, Archery, Unarmed)"
+      reason: "Reads live mcMMO skill levels; McMMOIntegrationListener currently suppresses non-Herbalism XP gain (returns 0 unless enabled/set)."
+    - key: "%skyrealms_mining_level%"
+      current_output: "Live mcMMO Mining level"
+      reason: "Reads live mcMMO Mining skill level; McMMOIntegrationListener currently suppresses non-Herbalism XP gain (returns 0 unless enabled/set)."
+    - key: "%skyrealms_server_event%"
+      current_output: "'Sakura Surge' / 'None'"
+      reason: "No global server event scheduler module exists in SkyRealmsCore yet; mirrors personal Garden Surge state."
+
+missing_links_note:
+  discord: "No official SkyRealms Discord URL exists in server or plugin configs; omitted from TAB footer."
+  website_and_address: "server-ip is unset and no SkyRealms website URL exists in repo configs; TAB footer displays server MOTD tagline instead of an invented domain."
+

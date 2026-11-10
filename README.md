@@ -76,11 +76,14 @@ SkyRealms is built as a **Modular Monolith** using decoupled Paper plugin JARs c
 | Plugin JAR | Description & Systems |
 | :--- | :--- |
 | **`SkyRealmsCore`** | **Platform Kernel**: Bootstraps the platform runtime, coordinates the DAG lifecycle, and manages dynamic commands. |
-| **`SkyRealmsDatabase`** | **Data Engine**: HikariCP connection pool, Flyway database migrations (V1 to V6), automatic failover from PostgreSQL to local H2. |
+| **`SkyRealmsDatabase`** | **Data Engine**: HikariCP connection pool, Flyway database migrations (V1 to V9), automatic failover from PostgreSQL to local H2. |
 | **`SkyRealmsPlayer`** | **Identity & Profiles**: Prelogin asynchronous profile caching (zero main-thread hitches), playtime statistics, personal settings. |
 | **`SkyRealmsEconomy`** | **Banking & Ledger**: Multi-currency engine (Coins & Gems), transactional double-entry ledger, full Vault economy provider. |
-| **`SkyRealmsIslands`** | **SkyBlock Islands**: Deterministic 2D spiral allocator (500-block spacing), dedicated void world `skyrealms_islands`, cooperative roles & permissions, boundary protection, Celestial Holograms. |
-| **`SkyRealmsFarming`** | **Agricultural Overhaul**: Retires legacy 5×5 generators. Delivers Project Sakura Glass Garden (520×168 block Japanese conservatory), Divine Offering ritual with Allay emissary cinematic, Elarion guide, First Harvest quest, 10-crop Crop Mastery (30 levels, 7 milestones), and 54-slot chest GUI. |
+| **`SkyRealmsIslands`** | **SkyBlock Islands**: Deterministic 2D spiral allocator (500-block spacing), dedicated void world `skyrealms_islands`, cooperative roles & permissions, boundary protection, Sakura Hub spawn & island void rescue. |
+| **`SkyRealmsFarming`** | **Agricultural Overhaul**: Project Sakura Glass Garden (16 customizable 4×4 chunk plots), mcMMO Herbalism progression, Harvest Reward Pipeline, Botanical Journal, Crop Mastery, and Garden abilities. |
+| **`SkyRealmsItems`** | **Custom Gear & Enchants**: Upgradable farming hoes, custom enchant controller (`EliteEnchantments`), vanilla enchant blocker, and stat providers. |
+| **`SkyRealmsPets`** | **3D Companions**: Cubees ModelEngine v4 pets, custom `/pets` GUI, pet XP progression, and Farming Fortune bonuses. |
+| **`SkyRealmsPlaceholders`** | **TAB & PAPI Bridge**: Registers `%skyrealms_*%` PlaceholderAPI expansion backed by cached SkyRealms/LuckPerms/mcMMO metrics. |
 
 ---
 
@@ -106,6 +109,9 @@ Flyway manages schema migrations across PostgreSQL and embedded H2:
 * **`V4__create_farming_tables.sql`**: `sr_farming_progress`, `sr_crop_collections`, `sr_farming_generators` *(retired)*.
 * **`V5__create_garden_tables.sql`**: `sr_gardens`, `sr_garden_plots`, `sr_garden_unlocks`, `sr_crop_mastery`, `sr_player_research`.
 * **`V6__create_garden_quests_and_milestones.sql`**: `sr_garden_offerings`, `sr_farming_quests`, milestone claims, Elarion intro flags.
+* **`V7__create_botanical_journal.sql`**: Botanical Journal crop discovery & harvest tracking.
+* **`V8__create_customizable_plot_tables.sql`**: Plot presets, crop beds, and plot layout customization.
+* **`V9__create_pet_tables.sql`**: Persistent unlocked pets, XP, levels, and active companion selection.
 
 ---
 
