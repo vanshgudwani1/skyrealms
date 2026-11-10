@@ -78,20 +78,21 @@ public final class LobbyService {
             world = Bukkit.getWorlds().get(0);
         }
         if (world != null) {
-            return new Location(world, 0.5, 71.0, 0.5, 0.0f, 0.0f);
+            Location spawn = world.getSpawnLocation();
+            return new Location(world, spawn.getBlockX() + 0.5, spawn.getY(), spawn.getBlockZ() + 0.5, spawn.getYaw(), spawn.getPitch());
         }
-        return new Location(Bukkit.getWorlds().get(0), 0.5, 100.0, 0.5, 0.0f, 0.0f);
+        return new Location(Bukkit.getWorlds().get(0), 0.5, 89.0, 0.5, 0.0f, 0.0f);
     }
 
     /**
-     * Initializes the Dragon Nest lobby if not already initialized or if forced.
+     * Initializes lobby ambient effects if already provisioned.
      */
     public CompletableFuture<Boolean> initLobby(boolean force) {
         if (!force && isLobbyInitialized()) {
-            LOGGER.info("Lobby is already initialized according to marker flag. Refreshing ambient engine & holograms...");
+            LOGGER.info("Lobby is already initialized according to marker flag. Clearing legacy holograms & starting ambient particles...");
             World world = Bukkit.getWorld("world");
             if (world != null) {
-                hologramService.spawnAllHolograms(world);
+                hologramService.clearHolograms(world);
                 startCoreParticleEngine(world);
             }
             return CompletableFuture.completedFuture(true);
@@ -315,14 +316,15 @@ public final class LobbyService {
     }
 
     /**
-     * Ambient live particle engine revolving around the floating core crystal.
+     * Ambient live particle engine revolving above the central lobby spawn dais.
      */
     public void startCoreParticleEngine(World world) {
         if (coreParticleTask != null && !coreParticleTask.isCancelled()) {
             coreParticleTask.cancel();
         }
 
-        final Location coreLoc = new Location(world, 0.5, 73.5, 0.5);
+        Location spawn = getLobbySpawnLocation();
+        final Location coreLoc = new Location(world, spawn.getX(), spawn.getY() + 2.5, spawn.getZ());
 
         coreParticleTask = new BukkitRunnable() {
             double angle = 0.0;

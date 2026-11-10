@@ -186,9 +186,11 @@ public final class FarmingProgressionService implements AutoCloseable {
         int newTier = calculateCollectionTier(col.amountCollected());
         if (newTier > currentTier) {
             col.setTierUnlocked(newTier);
-            player.sendMessage(Component.text("⭐ [Collection Milestone] ", NamedTextColor.GOLD, TextDecoration.BOLD)
-                    .append(Component.text(finalCropName + " Collection reached Tier " + newTier + "!", NamedTextColor.YELLOW)));
-            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 1.0f, 1.5f);
+            player.sendMessage(Component.text("✦ ", NamedTextColor.GOLD)
+                    .append(Component.text(finalCropName + " Collection ", NamedTextColor.YELLOW))
+                    .append(Component.text("Tier " + newTier, NamedTextColor.GREEN, TextDecoration.BOLD))
+                    .append(Component.text(" (/garden journal)", NamedTextColor.DARK_GRAY)));
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 0.8f, 1.5f);
         }
 
         final String persistentName = cropName;
@@ -209,6 +211,22 @@ public final class FarmingProgressionService implements AutoCloseable {
                 LOGGER.error("Failed to increment collection for {}: {}", playerUuid, e.getMessage());
             }
         });
+    }
+
+    @NotNull
+    public Map<String, FarmingCropCollection> getCollections(@NotNull UUID playerUuid) {
+        Map<String, FarmingCropCollection> cached = collectionsCache.get(playerUuid);
+        if (cached != null) {
+            return Collections.unmodifiableMap(cached);
+        }
+        try {
+            Map<String, FarmingCropCollection> loaded = repository.loadCollections(playerUuid);
+            collectionsCache.put(playerUuid, new ConcurrentHashMap<>(loaded));
+            return Collections.unmodifiableMap(loaded);
+        } catch (SQLException e) {
+            LOGGER.error("Error loading collections for {}: {}", playerUuid, e.getMessage());
+            return Collections.emptyMap();
+        }
     }
 
     private static int calculateCollectionTier(long total) {

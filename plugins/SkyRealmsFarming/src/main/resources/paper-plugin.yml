@@ -31,3 +31,15 @@ dependencies:
       load: BEFORE
       required: false
       join-classpath: true
+    SkyRealmsItems:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    SkyRealmsPets:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    mcMMO:
+      load: BEFORE
+      required: true
+      join-classpath: true

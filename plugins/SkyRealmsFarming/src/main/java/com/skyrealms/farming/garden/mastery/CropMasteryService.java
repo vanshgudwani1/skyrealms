@@ -4,45 +4,33 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Service managing individual player agricultural crop mastery progression,
- * milestone tracking, and bonus perk application.
+ * Service managing mcMMO-driven agricultural Crop Mastery progression,
+ * tier milestones, and GUI display.
  */
 public interface CropMasteryService {
 
-    /**
-     * Gets a player's crop mastery progression for a specific crop.
-     */
     @NotNull
     CropMastery getMastery(@NotNull UUID playerUuid, @NotNull CropType cropType);
 
-    /**
-     * Gets all 10 crop masteries for a player.
-     */
     @NotNull
     List<CropMastery> getAllMasteries(@NotNull UUID playerUuid);
 
     /**
-     * Awards crop mastery XP to a player for a verified harvest.
-     * Evaluates level ups, celebration announcements, and unlocks perks.
+     * Records a mature Garden crop harvest and checks mcMMO Farming level gates for tier advancement.
      */
-    void awardMasteryXp(@NotNull Player player, @NotNull CropType cropType, long xp);
+    void recordCropHarvest(@NotNull Player player, @NotNull CropType cropType, long harvestAmount, int mcMmoFarmingLevel);
 
     /**
-     * Claims a milestone reward for an achieved level.
+     * Re-evaluates all crop masteries when the player levels up in mcMMO Farming (Herbalism).
      */
-    boolean claimMilestoneReward(@NotNull Player player, @NotNull CropType cropType, int milestoneLevel);
+    void recheckAllMasteries(@NotNull Player player, int newMcMmoLevel);
 
-    /**
-     * Opens the 54-slot main Crop Mastery GUI.
-     */
+    boolean claimMilestoneReward(@NotNull Player player, @NotNull CropType cropType, int milestoneTier);
+
     void openMasteryGui(@NotNull Player player);
 
-    /**
-     * Opens the detailed milestone progression GUI for a specific crop.
-     */
     void openCropDetailGui(@NotNull Player player, @NotNull CropType cropType);
 }

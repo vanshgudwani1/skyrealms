@@ -16,6 +16,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityInteractEvent;
+import org.bukkit.event.player.PlayerBucketEmptyEvent;
+import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
@@ -133,7 +135,7 @@ public final class GardenProtectionListener implements Listener {
             return;
         }
 
-        // Check if breaking within a plot
+        // Check if breaking within a plot — players can ONLY break blocks inside unlocked plots (never outside plots)
         Optional<GardenPlot> optPlot = gardenService.getPlotAt(block.getLocation());
         if (optPlot.isPresent()) {
             GardenPlot plot = optPlot.get();
@@ -141,29 +143,17 @@ public final class GardenProtectionListener implements Listener {
                 event.setCancelled(true);
                 player.sendMessage(Component.text("🔒 Plot #" + plot.plotIndex() + " is locked! Unlock it with /garden plots.", NamedTextColor.RED));
                 player.playSound(block.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
+                return;
             }
-            // If unlocked: allow harvesting crops!
-        } else {
-            // Outside of plots: protect Sakura conservatory glass, paths, Torii arches, and shrine structure
-            Material mat = block.getType();
-            if (mat == Material.GLASS || mat == Material.TINTED_GLASS || mat == Material.WHITE_STAINED_GLASS
-                    || mat == Material.LIGHT_GRAY_STAINED_GLASS || mat == Material.PINK_STAINED_GLASS
-                    || mat == Material.CHERRY_LEAVES || mat == Material.CHERRY_LOG || mat == Material.CHERRY_WOOD
-                    || mat == Material.CHERRY_PLANKS || mat == Material.CHERRY_SLAB || mat == Material.CHERRY_STAIRS || mat == Material.CHERRY_FENCE
-                    || mat == Material.SPRUCE_LOG || mat == Material.SPRUCE_PLANKS || mat == Material.SPRUCE_SLAB || mat == Material.SPRUCE_STAIRS
-                    || mat == Material.DARK_OAK_LOG || mat == Material.DARK_OAK_PLANKS || mat == Material.DARK_OAK_SLAB || mat == Material.DARK_OAK_STAIRS || mat == Material.DARK_OAK_WOOD
-                    || mat == Material.MOSS_BLOCK || mat == Material.BAMBOO || mat == Material.FLOWERING_AZALEA || mat == Material.PINK_WOOL
-                    || mat == Material.STONE_BRICKS || mat == Material.STONE_BRICK_SLAB || mat == Material.STONE_BRICK_STAIRS
-                    || mat == Material.SMOOTH_STONE || mat == Material.SMOOTH_STONE_SLAB || mat == Material.POLISHED_ANDESITE
-                    || mat == Material.POLISHED_ANDESITE_SLAB || mat == Material.POLISHED_DEEPSLATE
-                    || mat == Material.POLISHED_DEEPSLATE_WALL || mat == Material.POLISHED_DEEPSLATE_STAIRS
-                    || mat == Material.DEEPSLATE_TILES || mat == Material.CUT_COPPER || mat == Material.WAXED_CUT_COPPER
-                    || mat == Material.QUARTZ_BLOCK || mat == Material.QUARTZ_PILLAR || mat == Material.CHISELED_QUARTZ_BLOCK
-                    || mat == Material.LECTERN || mat == Material.SEA_LANTERN || mat == Material.LANTERN
-                    || mat == Material.PRISMARINE || mat == Material.DARK_PRISMARINE) {
+            if (isPlotPerimeterBorder(garden, plot, block.getX(), block.getZ())) {
                 event.setCancelled(true);
-                player.sendMessage(Component.text("⛔ You cannot dismantle Sakura Glass Garden botanical architecture.", NamedTextColor.RED));
+                player.sendActionBar(Component.text("⛔ You cannot dismantle a plot's perimeter curb or Torii entrance.", NamedTextColor.RED));
+                return;
             }
+            // If unlocked and inside interior bounds: allow harvesting crops and customizing interior!
+        } else {
+            event.setCancelled(true);
+            player.sendActionBar(Component.text("⛔ You can only break blocks inside unlocked Garden plots!", NamedTextColor.RED));
         }
     }
 
@@ -189,7 +179,7 @@ public final class GardenProtectionListener implements Listener {
             return;
         }
 
-        // Check if placing in a locked plot
+        // Check if placing in an unlocked plot — players can ONLY build inside unlocked plots
         Optional<GardenPlot> optPlot = gardenService.getPlotAt(block.getLocation());
         if (optPlot.isPresent()) {
             GardenPlot plot = optPlot.get();
@@ -197,8 +187,67 @@ public final class GardenProtectionListener implements Listener {
                 event.setCancelled(true);
                 player.sendMessage(Component.text("🔒 Plot #" + plot.plotIndex() + " is locked! Unlock it with /garden plots.", NamedTextColor.RED));
                 player.playSound(block.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
+                return;
             }
+            if (isPlotPerimeterBorder(garden, plot, block.getX(), block.getZ())) {
+                event.setCancelled(true);
+                player.sendActionBar(Component.text("⛔ You cannot build on the plot's perimeter border or Torii entrance.", NamedTextColor.RED));
+            }
+        } else {
+            event.setCancelled(true);
+            player.sendActionBar(Component.text("⛔ You can only build inside unlocked Garden plots!", NamedTextColor.RED));
         }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBucketEmpty(PlayerBucketEmptyEvent event) {
+        Block block = event.getBlock();
+        if (!canModifyPlotBlock(event.getPlayer(), block, true)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBucketFill(PlayerBucketFillEvent event) {
+        Block block = event.getBlock();
+        if (!canModifyPlotBlock(event.getPlayer(), block, false)) {
+            event.setCancelled(true);
+        }
+    }
+
+    private boolean canModifyPlotBlock(@NotNull Player player, @NotNull Block block, boolean placing) {
+        if (!isGardenWorld(block.getLocation())) return true;
+        if (canBypass(player)) return true;
+
+        Optional<Garden> optGarden = gardenService.getGardenAt(block.getLocation());
+        if (optGarden.isEmpty()) return false;
+
+        Garden garden = optGarden.get();
+        Optional<Island> optIsland = islandService.getIsland(garden.islandId());
+        IslandPermission perm = placing ? IslandPermission.BLOCK_PLACE : IslandPermission.BLOCK_BREAK;
+        if (optIsland.isEmpty() || !optIsland.get().hasPermission(player.getUniqueId(), perm)) {
+            player.sendActionBar(Component.text("⛔ You do not have permission in this Garden.", NamedTextColor.RED));
+            return false;
+        }
+
+        Optional<GardenPlot> optPlot = gardenService.getPlotAt(block.getLocation());
+        if (optPlot.isEmpty() || !optPlot.get().unlocked()) {
+            player.sendActionBar(Component.text("⛔ You can only build and break inside unlocked Garden plots!", NamedTextColor.RED));
+            return false;
+        }
+        if (isPlotPerimeterBorder(garden, optPlot.get(), block.getX(), block.getZ())) {
+            player.sendActionBar(Component.text("⛔ You cannot modify a plot's perimeter border or Torii entrance.", NamedTextColor.RED));
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean isPlotPerimeterBorder(@NotNull Garden garden, @NotNull GardenPlot plot, int worldX, int worldZ) {
+        int minX = plot.getMinX(garden.centerX());
+        int maxX = plot.getMaxX(garden.centerX());
+        int minZ = plot.getMinZ(garden.centerZ());
+        int maxZ = plot.getMaxZ(garden.centerZ());
+        return worldX == minX || worldX == maxX || worldZ == minZ || worldZ == maxZ;
     }
 
     /**

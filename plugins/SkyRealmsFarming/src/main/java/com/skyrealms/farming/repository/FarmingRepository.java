@@ -480,7 +480,7 @@ public final class FarmingRepository {
         """;
         String updateSql = """
             UPDATE sr_gardens
-            SET unlocked = ?, unlocked_at = ?, updated_at = ?
+            SET center_x = ?, center_z = ?, size = ?, unlocked = ?, unlocked_at = ?, updated_at = ?
             WHERE garden_id = ?
         """;
 
@@ -512,10 +512,13 @@ public final class FarmingRepository {
                 }
             } else {
                 try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
-                    ps.setBoolean(1, garden.unlocked());
-                    ps.setTimestamp(2, garden.unlockedAt() != null ? Timestamp.from(garden.unlockedAt()) : now);
-                    ps.setTimestamp(3, now);
-                    ps.setObject(4, garden.gardenId());
+                    ps.setInt(1, garden.centerX());
+                    ps.setInt(2, garden.centerZ());
+                    ps.setInt(3, garden.size());
+                    ps.setBoolean(4, garden.unlocked());
+                    ps.setTimestamp(5, garden.unlockedAt() != null ? Timestamp.from(garden.unlockedAt()) : now);
+                    ps.setTimestamp(6, now);
+                    ps.setObject(7, garden.gardenId());
                     ps.executeUpdate();
                 }
             }
@@ -890,6 +893,343 @@ public final class FarmingRepository {
             ps.setObject(1, playerUuid);
             ps.setString(2, questId);
             ps.executeUpdate();
+        }
+    }
+
+    // =========================================================================
+    // Botanical Journal & Discovery Persistence (V7)
+    // =========================================================================
+
+    public record BotanicalJournalRecord(
+            UUID playerUuid,
+            int highestHarvestStreak,
+            int bestSingleHarvest,
+            String unlockedAchievements,
+            String discoveredVarieties,
+            Instant updatedAt
+    ) {}
+
+    public record MutationDiscoveryRecord(
+            UUID discoveryId,
+            UUID playerUuid,
+            String mutationType,
+            String cropType,
+            Instant discoveredAt,
+            long count
+    ) {}
+
+    @NotNull
+    public Optional<BotanicalJournalRecord> findBotanicalJournal(@NotNull UUID playerUuid) throws SQLException {
+        String sql = "SELECT player_uuid, highest_harvest_streak, best_single_harvest, unlocked_achievements, discovered_varieties, updated_at FROM sr_botanical_journal WHERE player_uuid = ?";
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, playerUuid);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(new BotanicalJournalRecord(
+                            (UUID) rs.getObject("player_uuid"),
+                            rs.getInt("highest_harvest_streak"),
+                            rs.getInt("best_single_harvest"),
+                            rs.getString("unlocked_achievements"),
+                            rs.getString("discovered_varieties"),
+                            rs.getTimestamp("updated_at").toInstant()
+                    ));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public void saveBotanicalJournal(@NotNull BotanicalJournalRecord record) throws SQLException {
+        String checkSql = "SELECT 1 FROM sr_botanical_journal WHERE player_uuid = ?";
+        String insertSql = """
+            INSERT INTO sr_botanical_journal (player_uuid, highest_harvest_streak, best_single_harvest, unlocked_achievements, discovered_varieties, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """;
+        String updateSql = """
+            UPDATE sr_botanical_journal
+            SET highest_harvest_streak = ?, best_single_harvest = ?, unlocked_achievements = ?, discovered_varieties = ?, updated_at = ?
+            WHERE player_uuid = ?
+        """;
+
+        try (Connection conn = databaseService.getConnection()) {
+            boolean exists = false;
+            try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+                ps.setObject(1, record.playerUuid());
+                try (ResultSet rs = ps.executeQuery()) {
+                    exists = rs.next();
+                }
+            }
+
+            Timestamp now = Timestamp.from(record.updatedAt() != null ? record.updatedAt() : Instant.now());
+            if (!exists) {
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setObject(1, record.playerUuid());
+                    ps.setInt(2, record.highestHarvestStreak());
+                    ps.setInt(3, record.bestSingleHarvest());
+                    ps.setString(4, record.unlockedAchievements() != null ? record.unlockedAchievements() : "");
+                    ps.setString(5, record.discoveredVarieties() != null ? record.discoveredVarieties() : "");
+                    ps.setTimestamp(6, now);
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setInt(1, record.highestHarvestStreak());
+                    ps.setInt(2, record.bestSingleHarvest());
+                    ps.setString(3, record.unlockedAchievements() != null ? record.unlockedAchievements() : "");
+                    ps.setString(4, record.discoveredVarieties() != null ? record.discoveredVarieties() : "");
+                    ps.setTimestamp(5, now);
+                    ps.setObject(6, record.playerUuid());
+                    ps.executeUpdate();
+                }
+            }
+        }
+    }
+
+    @NotNull
+    public List<MutationDiscoveryRecord> findMutationDiscoveries(@NotNull UUID playerUuid) throws SQLException {
+        String sql = "SELECT discovery_id, player_uuid, mutation_type, crop_type, discovered_at, count FROM sr_farming_mutation_discoveries WHERE player_uuid = ?";
+        List<MutationDiscoveryRecord> list = new ArrayList<>();
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, playerUuid);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(new MutationDiscoveryRecord(
+                            (UUID) rs.getObject("discovery_id"),
+                            (UUID) rs.getObject("player_uuid"),
+                            rs.getString("mutation_type"),
+                            rs.getString("crop_type"),
+                            rs.getTimestamp("discovered_at").toInstant(),
+                            rs.getLong("count")
+                    ));
+                }
+            }
+        }
+        return list;
+    }
+
+    // =========================================================================
+    // Customizable Plot Configuration, Crop Beds & Saved Layouts (V8)
+    // =========================================================================
+
+    @NotNull
+    public Optional<com.skyrealms.farming.garden.plot.PlotConfiguration> findPlotConfiguration(@NotNull UUID islandId, int plotIndex) throws SQLException {
+        String sql = """
+            SELECT selected_layout, irrigation_type, decoration_style, upgrade_level, expanded_radius
+            FROM sr_garden_plots
+            WHERE island_id = ? AND plot_index = ?
+        """;
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, islandId);
+            ps.setInt(2, plotIndex);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return Optional.empty();
+                }
+                List<com.skyrealms.farming.garden.plot.CropBed> beds = findPlotBeds(conn, islandId, plotIndex);
+                return Optional.of(new com.skyrealms.farming.garden.plot.PlotConfiguration(
+                        islandId,
+                        plotIndex,
+                        com.skyrealms.farming.garden.plot.PlotLayoutPreset.fromName(rs.getString("selected_layout")),
+                        com.skyrealms.farming.garden.plot.IrrigationType.fromName(rs.getString("irrigation_type")),
+                        com.skyrealms.farming.garden.plot.DecorationStyle.fromName(rs.getString("decoration_style")),
+                        rs.getInt("upgrade_level"),
+                        rs.getInt("expanded_radius"),
+                        beds
+                ));
+            }
+        }
+    }
+
+    public void savePlotConfiguration(@NotNull com.skyrealms.farming.garden.plot.PlotConfiguration config) throws SQLException {
+        String updateSql = """
+            UPDATE sr_garden_plots
+            SET selected_layout = ?, irrigation_type = ?, decoration_style = ?,
+                upgrade_level = ?, expanded_radius = ?, updated_at = ?
+            WHERE island_id = ? AND plot_index = ?
+        """;
+        try (Connection conn = databaseService.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setString(1, config.selectedLayout().name());
+                    ps.setString(2, config.irrigationType().name());
+                    ps.setString(3, config.decorationStyle().name());
+                    ps.setInt(4, config.upgradeLevel());
+                    ps.setInt(5, config.expandedRadius());
+                    ps.setTimestamp(6, Timestamp.from(Instant.now()));
+                    ps.setObject(7, config.islandId());
+                    ps.setInt(8, config.plotIndex());
+                    ps.executeUpdate();
+                }
+                replacePlotBeds(conn, config.islandId(), config.plotIndex(), config.beds());
+                conn.commit();
+            } catch (SQLException ex) {
+                conn.rollback();
+                throw ex;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        }
+    }
+
+    @NotNull
+    public List<com.skyrealms.farming.garden.plot.CropBed> findPlotBeds(@NotNull UUID islandId, int plotIndex) throws SQLException {
+        try (Connection conn = databaseService.getConnection()) {
+            return findPlotBeds(conn, islandId, plotIndex);
+        }
+    }
+
+    private List<com.skyrealms.farming.garden.plot.CropBed> findPlotBeds(Connection conn, UUID islandId, int plotIndex) throws SQLException {
+        String sql = """
+            SELECT bed_id, island_id, plot_index, bed_type, target_crop,
+                   min_local_x, min_local_z, max_local_x, max_local_z
+            FROM sr_garden_plot_beds
+            WHERE island_id = ? AND plot_index = ?
+            ORDER BY created_at ASC
+        """;
+        List<com.skyrealms.farming.garden.plot.CropBed> beds = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, islandId);
+            ps.setInt(2, plotIndex);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String cropStr = rs.getString("target_crop");
+                    com.skyrealms.farming.garden.mastery.CropType crop =
+                            cropStr != null ? com.skyrealms.farming.garden.mastery.CropType.fromCropId(cropStr) : null;
+                    beds.add(new com.skyrealms.farming.garden.plot.CropBed(
+                            (UUID) rs.getObject("bed_id"),
+                            (UUID) rs.getObject("island_id"),
+                            rs.getInt("plot_index"),
+                            com.skyrealms.farming.garden.plot.BedType.fromName(rs.getString("bed_type")),
+                            crop,
+                            rs.getInt("min_local_x"),
+                            rs.getInt("min_local_z"),
+                            rs.getInt("max_local_x"),
+                            rs.getInt("max_local_z")
+                    ));
+                }
+            }
+        }
+        return beds;
+    }
+
+    private void replacePlotBeds(Connection conn, UUID islandId, int plotIndex, List<com.skyrealms.farming.garden.plot.CropBed> beds) throws SQLException {
+        try (PreparedStatement del = conn.prepareStatement("DELETE FROM sr_garden_plot_beds WHERE island_id = ? AND plot_index = ?")) {
+            del.setObject(1, islandId);
+            del.setInt(2, plotIndex);
+            del.executeUpdate();
+        }
+        if (beds.isEmpty()) return;
+
+        String insertSql = """
+            INSERT INTO sr_garden_plot_beds (bed_id, island_id, plot_index, bed_type, target_crop,
+                                             min_local_x, min_local_z, max_local_x, max_local_z, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """;
+        try (PreparedStatement ins = conn.prepareStatement(insertSql)) {
+            Timestamp now = Timestamp.from(Instant.now());
+            for (com.skyrealms.farming.garden.plot.CropBed bed : beds) {
+                ins.setObject(1, bed.bedId());
+                ins.setObject(2, islandId);
+                ins.setInt(3, plotIndex);
+                ins.setString(4, bed.bedType().name());
+                ins.setString(5, bed.targetCrop() != null ? bed.targetCrop().name() : null);
+                ins.setInt(6, bed.minLocalX());
+                ins.setInt(7, bed.minLocalZ());
+                ins.setInt(8, bed.maxLocalX());
+                ins.setInt(9, bed.maxLocalZ());
+                ins.setTimestamp(10, now);
+                ins.addBatch();
+            }
+            ins.executeBatch();
+        }
+    }
+
+    @NotNull
+    public List<com.skyrealms.farming.garden.plot.SavedPlotLayout> findSavedLayouts(@NotNull UUID islandId) throws SQLException {
+        String sql = """
+            SELECT layout_id, island_id, layout_name, preset_base, irrigation_type, decoration_style, beds_serialized, created_at
+            FROM sr_garden_saved_layouts
+            WHERE island_id = ?
+            ORDER BY created_at DESC
+        """;
+        List<com.skyrealms.farming.garden.plot.SavedPlotLayout> list = new ArrayList<>();
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, islandId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(new com.skyrealms.farming.garden.plot.SavedPlotLayout(
+                            (UUID) rs.getObject("layout_id"),
+                            (UUID) rs.getObject("island_id"),
+                            rs.getString("layout_name"),
+                            com.skyrealms.farming.garden.plot.PlotLayoutPreset.fromName(rs.getString("preset_base")),
+                            com.skyrealms.farming.garden.plot.IrrigationType.fromName(rs.getString("irrigation_type")),
+                            com.skyrealms.farming.garden.plot.DecorationStyle.fromName(rs.getString("decoration_style")),
+                            rs.getString("beds_serialized"),
+                            rs.getTimestamp("created_at").toInstant()
+                    ));
+                }
+            }
+        }
+        return list;
+    }
+
+    public void savePlotLayout(@NotNull com.skyrealms.farming.garden.plot.SavedPlotLayout layout) throws SQLException {
+        String checkSql = "SELECT layout_id FROM sr_garden_saved_layouts WHERE island_id = ? AND layout_name = ?";
+        String insertSql = """
+            INSERT INTO sr_garden_saved_layouts (layout_id, island_id, layout_name, preset_base, irrigation_type, decoration_style, beds_serialized, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """;
+        String updateSql = """
+            UPDATE sr_garden_saved_layouts
+            SET preset_base = ?, irrigation_type = ?, decoration_style = ?, beds_serialized = ?
+            WHERE island_id = ? AND layout_name = ?
+        """;
+        try (Connection conn = databaseService.getConnection()) {
+            boolean exists = false;
+            try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+                ps.setObject(1, layout.islandId());
+                ps.setString(2, layout.layoutName());
+                try (ResultSet rs = ps.executeQuery()) {
+                    exists = rs.next();
+                }
+            }
+            if (!exists) {
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setObject(1, layout.layoutId());
+                    ps.setObject(2, layout.islandId());
+                    ps.setString(3, layout.layoutName());
+                    ps.setString(4, layout.presetBase().name());
+                    ps.setString(5, layout.irrigationType().name());
+                    ps.setString(6, layout.decorationStyle().name());
+                    ps.setString(7, layout.bedsSerialized());
+                    ps.setTimestamp(8, Timestamp.from(layout.createdAt()));
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setString(1, layout.presetBase().name());
+                    ps.setString(2, layout.irrigationType().name());
+                    ps.setString(3, layout.decorationStyle().name());
+                    ps.setString(4, layout.bedsSerialized());
+                    ps.setObject(5, layout.islandId());
+                    ps.setString(6, layout.layoutName());
+                    ps.executeUpdate();
+                }
+            }
+        }
+    }
+
+    public boolean deleteSavedLayout(@NotNull UUID islandId, @NotNull String layoutName) throws SQLException {
+        try (Connection conn = databaseService.getConnection();
+             PreparedStatement ps = conn.prepareStatement("DELETE FROM sr_garden_saved_layouts WHERE island_id = ? AND layout_name = ?")) {
+            ps.setObject(1, islandId);
+            ps.setString(2, layoutName);
+            return ps.executeUpdate() > 0;
         }
     }
 }

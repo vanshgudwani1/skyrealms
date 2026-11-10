@@ -30,6 +30,7 @@ tasks.jar {
 val deployToServer by tasks.registering(Copy::class) {
     description = "Copies the compiled plugin JAR directly to the server plugins folder"
     group = "deployment"
+    doNotTrackState("Prevents scanning locked server files")
     dependsOn(tasks.jar)
     from(tasks.jar.flatMap { it.archiveFile })
     into(rootProject.file("../plugins"))

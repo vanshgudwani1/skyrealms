@@ -1,6 +1,6 @@
 package com.skyrealms.islands.lobby;
 
-import com.skyrealms.islands.gui.IslandGui;
+import com.skyrealms.islands.service.IslandService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -13,7 +13,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockBurnEvent;
 import org.bukkit.event.block.BlockPhysicsEvent;
@@ -24,26 +23,36 @@ import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.plugin.Plugin;
 
 import java.time.Duration;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
- * Handles lobby world physics freeze, protection, void catch, join greeting, and castle station interactions.
+ * Handles lobby world physics freeze, protection, void catch (lobby and islands), and join greeting.
  */
 public final class LobbyListener implements Listener {
 
-    private final Plugin plugin;
-    private final LobbyService lobbyService;
-    private final IslandGui islandGui;
+    private static final double LOBBY_VOID_Y = 25.0;
+    private static final double ISLAND_VOID_Y = 0.0;
+    private static final long VOID_RESCUE_COOLDOWN_MS = 1500L;
 
-    public LobbyListener(Plugin plugin, LobbyService lobbyService, IslandGui islandGui) {
-        this.plugin = plugin;
-        this.lobbyService = lobbyService;
-        this.islandGui = islandGui;
+    private final Supplier<Location> lobbySpawnSupplier;
+    private final IslandService islandService;
+    private final Map<UUID, Long> recentVoidRescueMs = new ConcurrentHashMap<>();
+
+    public LobbyListener(Plugin plugin, LobbyService lobbyService, IslandService islandService) {
+        this(lobbyService::getLobbySpawnLocation, islandService);
+    }
+
+    LobbyListener(Supplier<Location> lobbySpawnSupplier, IslandService islandService) {
+        this.lobbySpawnSupplier = lobbySpawnSupplier;
+        this.islandService = islandService;
     }
 
     // --- PHYSICS FREEZE & ANTI-BREAK SHIELD ---
@@ -112,11 +121,20 @@ public final class LobbyListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityDamage(EntityDamageEvent event) {
-        if (event.getEntity().getWorld().getName().equals("world")) {
+        String worldName = event.getEntity().getWorld().getName();
+        if (worldName.equals("world")) {
             event.setCancelled(true);
             if (event.getCause() == EntityDamageEvent.DamageCause.VOID && event.getEntity() instanceof Player player) {
                 catchVoidPlayer(player);
             }
+            return;
+        }
+
+        if (islandService.isProtectedWorld(worldName)
+                && event.getCause() == EntityDamageEvent.DamageCause.VOID
+                && event.getEntity() instanceof Player player) {
+            event.setCancelled(true);
+            catchVoidPlayer(player);
         }
     }
 
@@ -131,17 +149,39 @@ public final class LobbyListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onMove(PlayerMoveEvent event) {
         Location to = event.getTo();
-        if (to.getWorld() != null && to.getWorld().getName().equals("world")) {
-            if (to.getY() < 25.0) {
-                catchVoidPlayer(event.getPlayer());
-            }
+        if (to.getWorld() == null) {
+            return;
+        }
+        String worldName = to.getWorld().getName();
+        double voidY = voidThresholdForWorld(worldName);
+        if (!Double.isNaN(voidY) && to.getY() < voidY) {
+            catchVoidPlayer(event.getPlayer());
         }
     }
 
+    private double voidThresholdForWorld(String worldName) {
+        if (worldName.equals("world")) {
+            return LOBBY_VOID_Y;
+        }
+        if (islandService.isProtectedWorld(worldName)) {
+            return ISLAND_VOID_Y;
+        }
+        return Double.NaN;
+    }
+
     private void catchVoidPlayer(Player player) {
-        Location spawn = lobbyService.getLobbySpawnLocation();
+        long now = System.currentTimeMillis();
+        Long lastRescue = recentVoidRescueMs.get(player.getUniqueId());
+        if (lastRescue != null && (now - lastRescue) < VOID_RESCUE_COOLDOWN_MS) {
+            return;
+        }
+        recentVoidRescueMs.put(player.getUniqueId(), now);
+
+        player.setFallDistance(0.0f);
+        Location spawn = lobbySpawnSupplier.get();
         player.teleportAsync(spawn).thenAccept(success -> {
             if (success) {
+                player.setFallDistance(0.0f);
                 player.playSound(spawn, Sound.ENTITY_PLAYER_TELEPORT, 1.0f, 1.2f);
                 player.playSound(spawn, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.5f);
                 player.spawnParticle(Particle.CHERRY_LEAVES, spawn, 40, 1.0, 1.0, 1.0, 0.05);
@@ -154,69 +194,16 @@ public final class LobbyListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         if (player.getWorld().getName().equals("world")) {
-            Location spawn = lobbyService.getLobbySpawnLocation();
+            Location spawn = lobbySpawnSupplier.get();
             player.teleportAsync(spawn);
 
             Title title = Title.title(
                     Component.text("✦ SKYREALMS ✦", NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD),
-                    Component.text("Celestial Dragon Nest Lobby", NamedTextColor.WHITE),
+                    Component.text("Celestial Sakura Hub", NamedTextColor.WHITE),
                     Title.Times.times(Duration.ofMillis(300), Duration.ofSeconds(3), Duration.ofMillis(500))
             );
             player.showTitle(title);
             player.playSound(spawn, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.0f);
-        }
-    }
-
-    // --- INTERACTIVE CASTLE & LOBBY STATIONS ---
-
-    @EventHandler
-    public void onInteract(PlayerInteractEvent event) {
-        if (!event.getPlayer().getWorld().getName().equals("world") || event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-
-        if (event.getClickedBlock() == null) {
-            return;
-        }
-
-        Location loc = event.getClickedBlock().getLocation();
-        Player player = event.getPlayer();
-
-        // 1. SkyBlock Portal Gateway (X=13, Z=0)
-        if (Math.abs(loc.getBlockX() - 13) <= 2 && Math.abs(loc.getBlockZ()) <= 2) {
-            event.setCancelled(true);
-            islandGui.openMenu(player);
-            return;
-        }
-
-        // 2. Castle Royal Treasury & Bank (X=-20, Z=35)
-        if (Math.abs(loc.getBlockX() - (-20)) <= 3 && Math.abs(loc.getBlockZ() - 35) <= 3) {
-            event.setCancelled(true);
-            player.performCommand("balance");
-            player.playSound(loc, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.4f);
-            return;
-        }
-
-        // 3. Castle Arcane Upgrades Spire (X=20, Z=35)
-        if (Math.abs(loc.getBlockX() - 20) <= 3 && Math.abs(loc.getBlockZ() - 35) <= 3) {
-            event.setCancelled(true);
-            islandGui.openMenu(player);
-            return;
-        }
-
-        // 4. Castle Citadel Throne & Hall of Fame (X=0, Z=55)
-        if (Math.abs(loc.getBlockX()) <= 3 && Math.abs(loc.getBlockZ() - 55) <= 3) {
-            event.setCancelled(true);
-            player.performCommand("island top");
-            player.playSound(loc, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 1.2f);
-            return;
-        }
-
-        // 5. Rewards Shrine (X=0, Z=13)
-        if (Math.abs(loc.getBlockX()) <= 2 && Math.abs(loc.getBlockZ() - 13) <= 2) {
-            event.setCancelled(true);
-            player.playSound(loc, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.2f);
-            player.sendMessage(Component.text("✦ Celestial Daily Rewards active! Your dedication powers the realm.", NamedTextColor.GREEN));
         }
     }
 }

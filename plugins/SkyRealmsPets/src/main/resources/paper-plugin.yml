@@ -1,0 +1,26 @@
+name: SkyRealmsPets
+version: '1.0.0'
+main: com.skyrealms.pets.SkyRealmsPetsPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Custom Cubees 3D ModelEngine Pets, Custom GUI, Leveling, and Garden Perks for SkyRealms.
+prefix: SkyRealms-Pets
+dependencies:
+  server:
+    SkyRealmsCore:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsDatabase:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    ModelEngine:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsEconomy:
+      load: BEFORE
+      required: false
+      join-classpath: false
+

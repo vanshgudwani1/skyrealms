@@ -4,8 +4,8 @@
 > **Server Target:** Minecraft Paper 1.21.1 (Build 133) on Java 21 LTS  
 > **Repository Root:** `C:\servermc\skyrealms`  
 > **Runtime Server Root:** `C:\servermc`  
-> **Last Updated:** 2026-11-08  
-> **Status:** Milestones 0, 1, 2, 3, 4 COMPLETED & VERIFIED (56/56 Tests Passing, 20.0 TPS)
+> **Last Updated:** 2026-11-10  
+> **Status:** Milestones M0–M4, Garden F1–F6 & Customizable Plot System P1–P5 COMPLETED & VERIFIED (97/97 Automated Tests Passing)
 
 ---
 
@@ -91,8 +91,8 @@ Minecraft Paper 1.21.1 Runtime (Java 21 LTS)
 * **Commands:** `/island` (`/is`), `/spawn`, `/lobby`, `/hub`.
 
 ### F. `SkyRealmsFarming` (`plugins:SkyRealmsFarming`)
-* **Role:** Natural progression SkyRealms Garden engine, shared void world (`skyrealms_garden`), $256 \times 256$ deterministic spatial region allocator, glass conservatory greenhouse domes, 16 crop plots in 2 rows $\times$ 8 columns, right-click fast harvest, crop collections, progression leveling, and complete retirement of legacy generator mechanics.
-* **Commands:** `/garden` (`/garden home`, `/garden leave`, `/garden info`, `/garden plots`, `/garden admin`), `/is farm`, `/farm stats`, `/farm help`.
+* **Role:** mcMMO-integrated SkyRealms Garden engine (`skyrealms_garden`), $768 \times 768$ deterministic spatial region allocator (1024 spacing), Sakura Glass Garden conservatory domes, 16 crop plots ($4 \times 4$ chunks each), centralized `HarvestRewardPipeline`, 4 Garden-only abilities (`Bountiful Harvest`, `Verdant Aura`, `Sakura Harvest Surge`, `Golden Sprout`), mcMMO-driven 10-crop Crop Mastery, Botanical Journal, and complete retirement of legacy generators, Natural Fast-Harvest, and Elarion/quests.
+* **Commands:** `/garden` (`/garden home`, `/garden leave`, `/garden mastery`, `/garden abilities`, `/garden journal`, `/garden info`, `/garden plots`, `/garden admin`), `/is farm`, `/farm stats`, `/farm help`.
 
 ---
 
@@ -108,10 +108,10 @@ Minecraft Paper 1.21.1 Runtime (Java 21 LTS)
 ### B. Shared Garden World (`skyrealms_garden`) & Spatial Region Allocation
 * **Dedicated World Architecture:** Single shared Paper world (`skyrealms_garden`) using `VoidChunkGenerator` and `VoidBiomeProvider(Biome.PLAINS)`. World rules locked at noon (6000 ticks), daylight cycle disabled, clear weather, and mob spawning disabled.
 * **Deterministic Spiral Allocator (`GardenSpatialAllocator`):**
-  * Spacing: 512 blocks center-to-center.
-  * Region Size: $256 \times 256$ blocks ($[-128, +128]$ from anchor).
-  * 256-block void gap buffer between adjacent gardens ensuring zero spatial overlap.
+  * Spacing: 1024 blocks center-to-center.
+  * Region Size: $768 \times 768$ blocks ($[-384, +384]$ from anchor), with 256-block void gap buffer between adjacent gardens.
   * $O(1)$ coordinate bijection mapping sequential island indexes to unique spiral coordinates and reversing block coordinates to nearest grid anchors.
+  * `DefaultGardenService.normalizeRegionSize` automatically upgrades any legacy `256`-sized database rows to `768`.
 
 ### C. Greenhouse Dome Procedural Generation (`GardenDomeGenerator`)
 * **Conservatory Architecture:**
@@ -127,14 +127,19 @@ Minecraft Paper 1.21.1 Runtime (Java 21 LTS)
     * Each plot features a $7 \times 7$ footprint with polished andesite borders, facing entrance opening, and internal $5 \times 5$ fertile farmland with sub-surface water irrigation.
     * Plot 1 (starter plot) generates pre-planted with mature wheat for immediate first harvest onboarding; Plots 2–16 unlock progressively.
 
-### D. Natural Farming Engine (`NaturalFarmingEngine` & `NaturalFarmingListener`)
-* **Supported Crop Types:** Wheat, Carrots, Potatoes, Beetroots, Melons, Pumpkins, Sugar Cane, Cactus, Cocoa Beans, Nether Wart.
-* **Maturity & Harvest Validation:**
-  * Ageable crops require maximum age (`Ageable.getAge() == Ageable.getMaximumAge()`).
-  * Stem fruits (Melon & Pumpkin) and vertical crops (Sugar Cane & Cactus) are tracked by the anti-exploit engine to reject player-placed blocks from granting XP or collections.
-  * Right-click fast harvest deposits drops directly into player inventory, resets crop age to 0 (or replants), plays villager happy particles, and sends action bar feedback.
-  * Configurable Farming XP awarded per crop type (Wheat: 10, Carrots: 12, Potatoes: 12, Beetroots: 15, Melons: 18, Pumpkins: 20, Sugar Cane: 14, Cactus: 16, Cocoa: 15, Nether Wart: 25).
-  * Increments crop collections in `sr_farming_crop_collections` and fires `GardenCropHarvestEvent`.
+### D. mcMMO Farming Integration, Reward Pipeline, Garden Abilities & Botanical Journal
+* **Authoritative mcMMO Bridge (`McMMOFarmingService` & `McMMOIntegrationListener`):**
+  * mcMMO `HERBALISM` (rebranded as **Farming**) is the single authoritative overall Farming XP and level source.
+  * All 18 non-Herbalism mcMMO skills, all built-in mcMMO active SuperAbilities/passive SubSkills, and all 18 non-Farming skill commands are blocked at runtime.
+  * Herbalism XP is strictly restricted to authorized, unlocked Garden regions inside `skyrealms_garden`.
+* **Centralized Harvest Reward Pipeline (`HarvestRewardPipeline` & `GardenBalanceConfig`):**
+  * Normal left-click mature crop breaks and Sakura Harvest Surge 3×3 AoE breaks route through one calculation & commit pipeline with per-block harvest locks and idempotent `harvestId` tracking.
+  * Unified bonus drop chance (`Bountiful Harvest + Crop Mastery`, clamped to `75%` and max 3 bonus drops), unified mcMMO XP multiplier (clamped to `2.0x`), single collection increment (`sr_farming_crop_collections`), and single Golden Sprout payout with per-harvest (`250`) and daily (`15,000`) caps.
+* **Custom Garden Abilities (`GardenAbilityService`, `VerdantAuraManager`, `GardenAbilitiesGui`):**
+  * `Bountiful Harvest` (Lv.1+: 5%–50%), `Verdant Aura` (Lv.10+ Haste I, Lv.25+ Speed I, Lv.50+ Haste II; removed on Garden/world exit), `Sakura Harvest Surge` (Lv.15+: Sneak + Right-Click Hoe, 3×3 AoE, persistent cooldowns), `Golden Sprout` (Lv.30+: 1%–15% Coins).
+* **mcMMO-Driven Crop Mastery & Botanical Journal (`CropMastery`, `DefaultBotanicalJournalService`, `BotanicalJournalGui`):**
+  * 10 crops × 7 Tiers gated by both mcMMO Farming level (`1, 5, 10, 20, 35, 50, 75`) and crop harvest counts (`25`–`7,500`), with distinct crop identities, discoveries, cosmetics, and equipment hooks.
+  * Botanical Journal (`sr_botanical_journal`) connects lifetime collections, mutation discoveries, harvest streaks, best single harvest, and 8 permanent botanical achievements.
 
 ### E. Region Protection & Boundary Containment (`GardenProtectionListener`)
 * **Boundary Enforcement:** Players cannot walk, fly, ender pearl, or chorus-fruit outside their $256 \times 256$ garden region. Attempting to cross pushes the player gently back towards the center with warning sound and message.
@@ -196,6 +201,9 @@ Upgrades purchased atomically using `EconomyService.withdraw(...)`:
 - `V2__create_economy_tables.sql`: `sr_currencies`, `sr_accounts`, `sr_ledger_transactions`, `sr_ledger_entries`, `sr_admin_audit_log`
 - `V3__create_island_tables.sql`: `sr_islands`, `sr_island_members`, `sr_island_upgrades`, `sr_island_settings`, `sr_island_visits`
 - `V4__create_farming_tables.sql`: `sr_farming_generators`, `sr_farming_generator_upgrades`, `sr_farming_player_progress`, `sr_farming_crop_collections`, `sr_farming_mutation_discoveries`
+- `V5__create_garden_tables.sql`: `sr_gardens`, `sr_garden_plots`, `sr_garden_unlocks`, `sr_crop_mastery`, `sr_player_research`
+- `V6__create_garden_quests_and_milestones.sql`: `sr_garden_offerings`, `sr_farming_quests`, `sr_crop_mastery.claimed_milestones`, `sr_player_research.elarion_intro_completed`
+- `V7__create_botanical_journal.sql`: `sr_botanical_journal` (highest harvest streak, best single harvest, achievements, discovered varieties)
 
 ### Migration V4 Schema
 ```sql
@@ -294,17 +302,17 @@ CREATE TABLE IF NOT EXISTS sr_farming_mutation_discoveries (
 
 ---
 
-## 7. Automated Test Suite (56 / 56 Passing)
+## 7. Automated Test Suite (97 / 97 Passing)
 
 Run via: `cd C:\servermc\skyrealms; .\gradlew test`
-* **`SpatialGridAllocatorTest` (4 tests):** Origin mapping, distance enforcement ($\ge 1000$), 10,000 index bijection, $O(1)$ spatial hash lookup.
-* **`IslandModelTest` (2 tests):** 4-tier role permission matrix, spatial coordinate bounds containment.
-* **`IslandRepositoryTest` (3 tests):** Atomic island creation, member updates, upgrade tracking and visit duration logging.
-* **`CropMutationEngineTest` (2 tests):** Probabilistic mutation roll distribution, deterministic seeded behavior.
-* **`FarmingProgressionTest` (2 tests):** Exponential power level curve calculations, progress model accumulation.
-* **`FarmingUpgradeTest` (2 tests):** Cost scaling calculations, maximum upgrade level boundaries.
-* **`FarmingRepositoryTest` (3 tests):** Generator save/retrieve with upgrades, player progress and collections tracking, cascading deletion on island delete.
-* **Platform, Database, Player & Economy Suites (38 tests):** Topological sorting & cycle detection, service registry concurrent resolution, event bus priority ordering, HikariCP pool creation, Flyway migration execution, double-entry ledger debits/credits, idempotency deduplication.
+* **`PlotCustomizationAndBedTest` & `PlotRepositoryTest` (7 tests):** CropBed interior bounds/overlap/radius validation, all preset layouts bounded inside plot active zone, Rich Soil/Specialized Bed integration through `HarvestRewardPipeline`, `SavedPlotLayout` serialization, planting material mapping, and Flyway V8 (`sr_garden_plots` extensions, `sr_garden_plot_beds`, `sr_garden_saved_layouts`) round-trip persistence.
+* **`HarvestRewardPipelineTest` (4 tests):** Primary vs AoE XP deduplication, combined bonus drop cap, Golden Sprout per-harvest & daily caps, per-block claim locking.
+* **`CropMasteryAndAbilityTest` (3 tests):** Dual mcMMO level + harvest gates, all 10 crop identities/discoveries/cosmetics/equipment hooks, probability scaling and cooldown persistence across relog.
+* **`BotanicalJournalRepositoryTest` (1 test):** V7 `sr_botanical_journal` persistence, updates, and `sr_farming_mutation_discoveries` integration.
+* **`GardenPlotTest` & `GardenSpatialAllocatorTest` (11 tests):** 4×4 chunk plot bounds, non-overlapping 2×8 grid, 5,000-region spiral bijection & nearest-anchor reversal.
+* **`SpatialGridAllocatorTest`, `IslandModelTest`, `IslandRepositoryTest` (9 tests):** Island spatial allocation, 4-tier role permissions, island persistence.
+* **`FarmingRepositoryTest`, `GardenOfferingAndQuestRepositoryTest`, `FarmingProgressionTest`, `FarmingUpgradeTest`, `CropMutationEngineTest`, `LegacyGeneratorRetirementTest` (21 tests):** Garden & offering repository persistence, legacy retirement checks, progression & mutation math.
+* **Platform, Database, Player & Economy Suites (41 tests):** Topological DAG sort & cycle detection, service registry, event bus, HikariCP, Flyway V1–V8 migration validation, double-entry ledger, idempotency, Vault bridge.
 
 ---
 

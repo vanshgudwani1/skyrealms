@@ -1,0 +1,50 @@
+name: SkyRealmsPlaceholders
+version: '1.0.0'
+main: com.skyrealms.placeholders.SkyRealmsPlaceholdersPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: PlaceholderAPI expansion exposing cached SkyRealms progression, economy, garden, and island metrics.
+prefix: SkyRealms-Placeholders
+dependencies:
+  server:
+    PlaceholderAPI:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsCore:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    SkyRealmsPlayer:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    SkyRealmsEconomy:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    SkyRealmsIslands:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    SkyRealmsFarming:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    SkyRealmsItems:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    SkyRealmsPets:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    mcMMO:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Vault:
+      load: BEFORE
+      required: false
+      join-classpath: true
+

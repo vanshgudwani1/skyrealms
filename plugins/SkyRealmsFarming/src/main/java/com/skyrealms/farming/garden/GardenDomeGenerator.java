@@ -335,13 +335,18 @@ public final class GardenDomeGenerator {
                             setBlockFast(world, x, cy + 1, z, Material.STONE_BRICK_SLAB);
                         }
                     } else {
-                        // Interior Farmland & Irrigation Grid
+                        // Clean customizable plot interior (62x62): grass lawn, entrance walkway, and starter 9x9 Basic Bed
                         setBlockFast(world, x, cy - 1, z, Material.DIRT);
+                        int dx = x - pcx;
+                        int dz = z - pcz;
 
-                        // 100% moisture irrigation grid every 8 blocks with sea lantern illumination
-                        boolean isIrrigation = ((x - pcx) % 8 == 0) && ((z - pcz) % 8 == 0);
+                        boolean isStarterBed = (dx >= -4 && dx <= 4 && dz >= -4 && dz <= 4);
+                        boolean isStarterWater = (dx == 0 && dz == 0);
+                        boolean isEntranceWalkway = isNorthRow
+                                ? (Math.abs(dx) <= 1 && dz >= 5 && dz <= 30)
+                                : (Math.abs(dx) <= 1 && dz >= -30 && dz <= -5);
 
-                        if (isIrrigation) {
+                        if (isStarterWater) {
                             setBlockFast(world, x, cy - 1, z, Material.SEA_LANTERN);
                             setBlockFast(world, x, cy, z, Material.WATER);
                             Block slabBlock = world.getBlockAt(x, cy, z);
@@ -350,18 +355,12 @@ public final class GardenDomeGenerator {
                                 wl.setWaterlogged(true);
                                 slabBlock.setBlockData(slabData, false);
                             }
-                        } else {
+                        } else if (isStarterBed) {
                             setBlockFast(world, x, cy, z, Material.FARMLAND);
-
-                            // Pre-plant starter Plot 1 with lush golden wheat
-                            if (plotIndex == 1) {
-                                Block cropBlock = world.getBlockAt(x, cy + 1, z);
-                                cropBlock.setType(Material.WHEAT, false);
-                                if (cropBlock.getBlockData() instanceof Ageable ageable) {
-                                    ageable.setAge(ageable.getMaximumAge());
-                                    cropBlock.setBlockData(ageable, false);
-                                }
-                            }
+                        } else if (isEntranceWalkway) {
+                            setBlockFast(world, x, cy, z, Material.SMOOTH_STONE);
+                        } else {
+                            setBlockFast(world, x, cy, z, Material.GRASS_BLOCK);
                         }
                     }
                 }

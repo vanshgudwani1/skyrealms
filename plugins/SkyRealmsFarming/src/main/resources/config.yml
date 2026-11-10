@@ -107,13 +107,77 @@ generator:
 
 
 # ==============================================================================
-# SkyRealms Garden Natural Farming Configuration
+# SkyRealms Garden — mcMMO Farming, Abilities, Crop Mastery & Balance Config
 # ==============================================================================
 garden:
   world: "skyrealms_garden"
   grid:
-    spacing: 512
-    region-size: 256
+    spacing: 1024
+    region-size: 768
+
+  reward-caps:
+    max-combined-bonus-drop-chance: 0.75
+    max-bonus-drops-per-harvest: 3
+    max-xp-multiplier: 2.0
+    golden-sprout-max-coins-per-harvest: 250.0
+    golden-sprout-daily-coin-cap: 15000.0
+    golden-sprout-log-threshold: 500.0
+
+  abilities:
+    bountiful-harvest:
+      enabled: true
+      unlock-level: 1
+      min-chance: 0.05
+      max-chance: 0.50
+      max-scale-level: 100
+      eligible-crops:
+        - WHEAT
+        - CARROT
+        - POTATO
+        - BEETROOT
+        - MELON
+        - PUMPKIN
+        - SUGAR_CANE
+        - CACTUS
+        - COCOA
+        - NETHER_WART
+
+    verdant-aura:
+      enabled: true
+      unlock-level: 10
+      haste-1-level: 10
+      speed-1-level: 25
+      haste-2-level: 50
+      duration-ticks: 200
+
+    sakura-surge:
+      enabled: true
+      unlock-level: 15
+      min-duration-seconds: 10
+      max-duration-seconds: 20
+      min-cooldown-seconds: 30
+      base-cooldown-seconds: 60
+
+    golden-sprout:
+      enabled: true
+      unlock-level: 30
+      min-chance: 0.01
+      max-chance: 0.15
+      max-scale-level: 100
+      level-coin-bonus: 1.25
+      mastery-tier-coin-bonus: 5.0
+      crop-base-coins:
+        WHEAT: 12.0
+        CARROT: 14.0
+        POTATO: 14.0
+        BEETROOT: 16.0
+        MELON: 15.0
+        PUMPKIN: 18.0
+        SUGAR_CANE: 15.0
+        CACTUS: 16.0
+        COCOA: 18.0
+        NETHER_WART: 22.0
+
   crops:
     wheat:
       xp: 10

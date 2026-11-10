@@ -1,0 +1,14 @@
+name: SkyRealmsPets
+version: 1.0.0
+main: com.skyrealms.pets.SkyRealmsPetsPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Custom Cubees 3D ModelEngine Pets, Custom GUI, Leveling, and Garden Perks for SkyRealms.
+depend: [SkyRealmsCore, SkyRealmsDatabase, ModelEngine]
+softdepend: [SkyRealmsEconomy]
+commands:
+  pets:
+    description: Open the Cubees Pets menu, summon/dismiss pets, or rename your active pet.
+    usage: /pets [rename|dismiss|give|help]
+    aliases: [pet, cubees, cubee]
+

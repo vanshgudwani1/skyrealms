@@ -89,7 +89,10 @@ class FlywayMigrationTest {
                 "sr_crop_mastery",
                 "sr_player_research",
                 "sr_garden_offerings",
-                "sr_farming_quests"
+                "sr_farming_quests",
+                "sr_botanical_journal",
+                "sr_garden_plot_beds",
+                "sr_garden_saved_layouts"
         );
     }
 }

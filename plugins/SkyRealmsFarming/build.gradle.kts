@@ -15,6 +15,7 @@ dependencies {
     compileOnly("org.slf4j:slf4j-api:${property("slf4jVersion")}")
     compileOnly("org.jetbrains:annotations:26.0.2")
     compileOnly(files(rootProject.file("../plugins/DecentHolograms-2.8.11.jar")))
+    compileOnly(files(rootProject.file("../plugins/mcMMO.jar")))
 
     testImplementation(project(":platform:testing"))
     testImplementation(project(":platform:common"))
@@ -29,6 +30,7 @@ dependencies {
     testImplementation("org.flywaydb:flyway-database-postgresql:${property("flywayVersion")}")
     testImplementation("com.h2database:h2:${property("h2Version")}")
     testImplementation("com.zaxxer:HikariCP:${property("hikariVersion")}")
+    testImplementation(files(rootProject.file("../plugins/mcMMO.jar")))
 }
 
 tasks.jar {

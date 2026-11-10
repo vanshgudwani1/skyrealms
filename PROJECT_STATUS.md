@@ -1,14 +1,14 @@
 # SkyRealms Project Status
 
-**Current Milestone:** Garden Redesign — Phase G3: Garden Unlock & Introduction and Phase G4: Crop Mastery  
-**Status:** COMPLETED & VERIFIED  
+**Current Milestone:** Garden Plot System Redesign — Customizable Plots, Crop Beds & Layout Studio (Phases P1–P5)  
+**Status:** COMPLETED & VERIFIED (97/97 Automated Tests Passing)  
 **Server Target:** Paper 1.21.1 (Build 133) on Java 21 LTS  
-**Last Verified:** 2026-11-08  
+**Last Verified:** 2026-11-10  
 **Master Memory Document:** [`MEMORY.md`](file:///C:/servermc/skyrealms/MEMORY.md)
 
 ---
 
-## 1. Completed Tasks (M0–M4, Void Lobby, Garden G1, G2, G3 & G4)
+## 1. Completed Tasks (M0–M4, Void Lobby, Garden G1–G3 & Farming Overhaul F1–F6)
 
 | Task | Scope | Status | Notes |
 | :--- | :--- | :--- | :--- |
@@ -35,27 +35,22 @@
 | **Garden Spatial Region Allocator** | `GardenSpatialAllocator` | ✅ Completed | Deterministic 2D spiral allocator mapping sequential island indexes to collision-free $768 \times 768$ regions with 1024-block spacing (256-block void gap buffer). |
 | **Grand Cathedral Conservatory Dome Generator** | `GardenDomeGenerator` | ✅ Completed | Procedural generator building a monumental $640 \times 180$ block Victorian/Gothic cathedral glass conservatory: soaring central crossing cupola (Y=124), 512-block barrel vaults with polished deepslate ribs & copper spines, 32-block wide Grand Boulevard with sunken reflecting canal, illuminated bridges, West Arrival Pavilion, and East Elarion Botanical Sanctuary. |
 | **16-Plot 4x4 Chunks Layout & Irrigation** | `GardenPlot` | ✅ Completed | Symmetrical 2 rows $\times$ 8 columns layout where each plot is at least 4x4 chunks ($64 \times 64$ blocks = 4,096 blocks), complete with ornate gatehouse portico, perimeter stone curb, and 100% moisture irrigation grid with sea lanterns. Plot 1 pre-planted with 4,000+ mature golden wheat. |
-| **Natural Farming Engine (Phase G2)** | `NaturalFarmingEngine` & `NaturalFarmingListener` | ✅ Completed | Right-click fast harvest, auto-replant, moisture acceleration, anti-exploit player placed tracking, collection incrementation, and `GardenCropHarvestEvent` dispatching. |
-| **Offering Workflow & Custom Items (Phase G3)** | `GardenItemFactory` & `DefaultOfferingService` | ✅ Completed | PersistentDataContainer item validation (Enchanted Hay Bale, Enchanted Carrot, Enchanted Sugar Cane), hopper move protection, concurrency mutex lock, atomic item consumption, and custom crafting recipes. |
-| **Divine Offering Cinematic (Phase G3)** | `DivineCinematicService` | ✅ Completed | 7-second divine lightning and emissary flight cinematic, rotating Allay entity, title sequence, and co-op island unlock persistence. |
-| **Elarion Introduction (Phase G3)** | `ElarionService` & `ElarionListener` | ✅ Completed | Interactive botanist tutorial dialogue on first garden entry, starter kit delivery (Novice Cultivator Hoe, 16 seeds, 8 bone meal), and `sr_player_research.elarion_intro_completed` persistence. |
-| **First Harvest Quest (Phase G3)** | `DefaultFarmingQuestService` & `FarmingQuestListener` | ✅ Completed | Till 16, plant 16, and mature harvest 16 objectives tracking, automatic reward disbursement (+500 XP, +2,500 coins, 16 carrots), and `sr_farming_quests` persistence. |
-| **Individual Crop Mastery (Phase G4)** | `DefaultCropMasteryService` & `CropMastery` | ✅ Completed | Player-specific progression for all 10 vanilla crops across 30 levels ($XP(L) = \lfloor 50 \times L^{2.1} \rfloor$), 7 milestone tiers per crop (levels 1, 5, 10, 15, 20, 25, 30), and accumulative double drop perks (+5% to +40%). |
-| **54-Slot Mastery GUI & Commands (Phase G4)** | `CropMasteryGui` & `GardenCommand` | ✅ Completed | Interactive chest GUI displaying total mastery score, individual crop progress bars, and milestone tiers; integrated `/garden mastery` and `/garden quest` commands. |
-| **Database Migration V6** | `SkyRealmsDatabase` | ✅ Completed | Flyway V6 migration creating `sr_garden_offerings`, `sr_farming_quests`, altering `sr_crop_mastery` and `sr_player_research`. |
-| **Paper Server Runtime Verification** | Minecraft Runtime | ✅ Completed | Deployed updated JARs to Paper 1.21.1 server. All 6 modules enabled without errors, running at 20.0 TPS with live in-game command verification. |
+| **Legacy Feature Removal & mcMMO Switch** | `SkyRealmsFarming` & `mcMMO` | ✅ Completed | Deleted Natural Fast-Harvest, Elarion/First Harvest quests, and standalone Crop Mastery XP curve. Configured mcMMO (`HERBALISM` -> Farming only) with disabled stock abilities/subskills and runtime command/region guards. |
+| **F1: Centralized Harvest Reward Pipeline** | `HarvestRewardPipeline` & `GardenBalanceConfig` | ✅ Completed | Unified bonus drops (75% max chance, 3 bonus item cap), mcMMO XP (preventing double base XP), collections (`sr_farming_crop_collections`), and per-block harvest claim locking. |
+| **F2: mcMMO Integration Hardening** | `McMMOIntegrationListener` & `McMMOFarmingService` | ✅ Completed | Verified mcMMO 2.3.002 `ExperienceAPI`; enforced authorized Garden region + `BLOCK_BREAK` permission check on `McMMOPlayerPreXpGainEvent`; blocked 18 non-farming skills & commands. |
+| **F3: Garden Abilities Balancing & Security** | `GardenAbilityService` & `VerdantAuraManager` | ✅ Completed | Balanced `Bountiful Harvest` (5%–50%), bounded `Verdant Aura` (removed on Garden/world exit), secured `Sakura Harvest Surge` (per-block validation, cooldown retained across relog), and capped `Golden Sprout` (per-harvest 250 / daily 15,000 Coins). |
+| **F4: Crop Mastery Identities & GUI** | `MasteryMilestone`, `CropMastery`, `CropMasteryGui` | ✅ Completed | Distinct identities & reward separation (drops, XP, coins, discoveries, cosmetics, equipment hooks) across all 10 crops × 7 mcMMO-gated tiers. |
+| **F5: Botanical Journal & Flyway V7** | `BotanicalJournalService`, `BotanicalJournalGui`, `V7` | ✅ Completed | Added Flyway `V7__create_botanical_journal.sql` (`sr_botanical_journal`), connected collections & mutation discoveries, 8 achievements, and unified navigation across `/garden abilities`, `/garden mastery`, and `/garden journal`. |
+| **F6: Automated Suite & JAR Deployment** | All Modules | ✅ Completed | 90/90 unit tests passing (`.\gradlew test --rerun-tasks`); deployed `SkyRealmsDatabase-1.0.0.jar` and `SkyRealmsFarming-1.0.0.jar` to `C:\servermc\plugins\`. |
+| **P1–P5: Customizable Plot System & V8** | `garden.plot.*`, `GardenDomeGenerator`, `V8` | ✅ Completed | Replaced fixed pre-planted plot interiors with Clean Canvas + starter 9×9 Basic Bed; added 5 layout presets (`Traditional Rows`, `Japanese Garden`, `Greenhouse`, `Terraced Garden`, `Clean Canvas`), `CropBed` (`Basic`, `Rich Soil`, `Specialized`) routed through `HarvestRewardPipeline`, `IrrigationType`, `DecorationStyle`, `PlotUpgradeTier` Lv.1–4, `PlotEditorService`, 54-slot `GardenPlotGui`, `/garden plot [edit|layout|save|reset]`, perimeter curb/Torii shield, Flyway `V8__create_customizable_plot_tables.sql`, and 7 new tests (`97/97` passing total). |
 
 ---
 
-## 2. Incomplete / Upcoming Tasks (Garden Phased Roadmap)
+## 2. Incomplete / Upcoming Tasks (Future Garden & Platform Milestones)
 
-* [ ] **Phase G5: Garden Equipment System** (Harvesting Scythe, Watering Can, Cultivator Hoe, Farmer Backpack, Farmer Armor).
+* [ ] **Phase G5: Garden Equipment System** (Specialized Hoes, Harvesting Scythe, Watering Can, Fertilizer Tools, Farmer Armor).
 * [ ] **Phase G6: Garden Soil & Research Progression** (soil profiles, fertilizers, research points, 5 research branches).
-* [ ] **Phase G7: Crop Mutation & Divine Blessings** (mutation engine, Botanical Journal, divine altar, blessings).
-* [ ] **Phase G8: Garden Competitions & Endgame** (Harvest Festival, rotating weekly categories, leaderboards).
-* [ ] **Phase G5: Garden Equipment System** (Harvesting Scythe, Watering Can, Cultivator Hoe, Farmer Backpack, Farmer Armor).
-* [ ] **Phase G6: Garden Soil & Research Progression** (soil profiles, fertilizers, research points, 5 research branches).
-* [ ] **Phase G7: Crop Mutation & Divine Blessings** (mutation engine, Botanical Journal, divine altar, blessings).
+* [ ] **Phase G7: Crop Mutation & Divine Blessings** (mutation engine, divine altar, blessings).
 * [ ] **Phase G8: Garden Competitions & Endgame** (Harvest Festival, rotating weekly categories, leaderboards).
 
 ---

@@ -1,0 +1,9 @@
+name: SkyRealmsPlaceholders
+version: 1.0.0
+main: com.skyrealms.placeholders.SkyRealmsPlaceholdersPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: PlaceholderAPI expansion exposing cached SkyRealms progression, economy, garden, and island metrics.
+depend: [PlaceholderAPI]
+softdepend: [SkyRealmsCore, SkyRealmsPlayer, SkyRealmsEconomy, SkyRealmsIslands, SkyRealmsFarming, SkyRealmsItems, SkyRealmsPets, mcMMO, Vault, LuckPerms]
+

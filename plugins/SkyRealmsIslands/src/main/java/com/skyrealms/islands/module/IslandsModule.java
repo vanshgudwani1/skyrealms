@@ -129,17 +129,17 @@ public final class IslandsModule implements SkyModule {
                 handler
         );
 
-        // 6. Initialize Celestial Dragon Nest Lobby Service & Commands
+        // 6. Initialize Celestial Sakura Lobby Service & Commands
         com.skyrealms.islands.lobby.LobbyService lobbyService = new com.skyrealms.islands.lobby.LobbyService(plugin);
         islandManager.setTeleportWarmupService(lobbyService.getTeleportWarmupService());
-        com.skyrealms.islands.lobby.LobbyListener lobbyListener = new com.skyrealms.islands.lobby.LobbyListener(plugin, lobbyService, gui);
+        com.skyrealms.islands.lobby.LobbyListener lobbyListener = new com.skyrealms.islands.lobby.LobbyListener(plugin, lobbyService, islandManager);
         Bukkit.getPluginManager().registerEvents(lobbyListener, plugin);
 
         com.skyrealms.islands.lobby.LobbyCommand lobbyCommand = new com.skyrealms.islands.lobby.LobbyCommand(plugin, lobbyService);
         DynamicCommandRegistrar.register(
                 "skyrealms",
                 "spawn",
-                "Teleport to the Celestial Dragon Nest Lobby",
+                "Teleport to the Celestial Sakura Hub",
                 "/spawn",
                 java.util.List.of("lobby", "hub"),
                 "skyrealms.spawn.use",

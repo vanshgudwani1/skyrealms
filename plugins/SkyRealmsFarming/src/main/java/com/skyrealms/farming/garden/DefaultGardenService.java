@@ -63,7 +63,8 @@ public final class DefaultGardenService implements GardenService {
     private void loadAllGardensFromDatabase() {
         try {
             List<Garden> gardens = repository.loadAllGardens();
-            for (Garden garden : gardens) {
+            for (Garden loaded : gardens) {
+                Garden garden = normalizeRegionSize(loaded);
                 gardensByIsland.put(garden.islandId(), garden);
                 long key = spatialKey(garden.centerX(), garden.centerZ());
                 spatialIndex.put(key, garden.islandId());
@@ -90,6 +91,30 @@ public final class DefaultGardenService implements GardenService {
         } catch (SQLException e) {
             logger.warning("Could not preload gardens from database: " + e.getMessage());
         }
+    }
+
+    private Garden normalizeRegionSize(@NotNull Garden garden) throws SQLException {
+        if (garden.size() >= allocator.regionSize()) {
+            return garden;
+        }
+        GardenSpatialAllocator.GridCoord expectedCenter = allocator.getGardenCenter(garden.regionIndex());
+        Garden upgraded = new Garden(
+                garden.gardenId(),
+                garden.islandId(),
+                garden.regionIndex(),
+                garden.worldName(),
+                expectedCenter.x(),
+                garden.centerY(),
+                expectedCenter.z(),
+                allocator.regionSize(),
+                garden.unlocked(),
+                garden.unlockedAt(),
+                garden.createdAt()
+        );
+        repository.saveGarden(upgraded);
+        logger.info("Upgraded Garden region bounds for island " + garden.islandId()
+                + " from " + garden.size() + " to " + allocator.regionSize() + " blocks.");
+        return upgraded;
     }
 
     private long spatialKey(int x, int z) {
@@ -149,7 +174,7 @@ public final class DefaultGardenService implements GardenService {
                 // 1. Check database first
                 Optional<Garden> fromDb = repository.findGardenByIsland(islandId);
                 if (fromDb.isPresent()) {
-                    Garden garden = fromDb.get();
+                    Garden garden = normalizeRegionSize(fromDb.get());
                     cacheGarden(garden);
                     List<GardenPlot> plots = repository.findPlotsByIsland(islandId);
                     plotsByIsland.put(islandId, new ArrayList<>(plots));
@@ -332,8 +357,8 @@ public final class DefaultGardenService implements GardenService {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 Location dest = garden.getSpawnLocation();
                 warmupService.teleportWithWarmup(player, dest, "SkyRealms Garden", () -> {
-                    player.sendMessage(Component.text("🌿 Welcome to your Greenhouse Garden Sanctuary!", NamedTextColor.GREEN, TextDecoration.BOLD));
-                    player.sendMessage(Component.text("Type /garden home to return to the entrance or /garden leave to return to your island.", NamedTextColor.YELLOW));
+                    player.sendMessage(Component.text("✦ Entered your Sakura Garden ", NamedTextColor.GREEN)
+                            .append(Component.text("(/garden mastery | /garden leave)", NamedTextColor.DARK_GRAY)));
                 });
             });
         }).exceptionally(ex -> {

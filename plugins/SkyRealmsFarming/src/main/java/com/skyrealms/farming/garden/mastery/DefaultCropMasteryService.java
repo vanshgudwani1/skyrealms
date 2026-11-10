@@ -1,8 +1,12 @@
 package com.skyrealms.farming.garden.mastery;
 
 import com.skyrealms.economy.service.EconomyService;
+import com.skyrealms.farming.garden.ability.GardenAbilityService;
+import com.skyrealms.farming.mcmmo.McMMOFarmingService;
 import com.skyrealms.farming.repository.FarmingRepository;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -22,28 +26,33 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
- * Authoritative implementation of CropMasteryService.
- * Handles XP accumulation across 30 levels, milestone reward disbursement via EconomyService,
- * and asynchronous persistence to the database.
+ * Authoritative mcMMO-driven implementation of CropMasteryService.
+ * Tracks crop harvest counts, enforces mcMMO Farming (Herbalism) level gates,
+ * awards tier milestone coin rewards via EconomyService, and persists to sr_crop_mastery.
  */
 public final class DefaultCropMasteryService implements CropMasteryService {
 
     private final Plugin plugin;
     private final FarmingRepository repository;
     private final EconomyService economyService;
+    private final McMMOFarmingService mcMmoService;
+    private final GardenAbilityService abilityService;
     private final Logger logger;
 
-    // Cache: Player UUID -> Map of CropType -> CropMastery
     private final Map<UUID, Map<CropType, CropMastery>> cache = new ConcurrentHashMap<>();
 
     public DefaultCropMasteryService(
             @NotNull Plugin plugin,
             @NotNull FarmingRepository repository,
-            @NotNull EconomyService economyService
+            @NotNull EconomyService economyService,
+            @NotNull McMMOFarmingService mcMmoService,
+            @NotNull GardenAbilityService abilityService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin cannot be null");
         this.repository = Objects.requireNonNull(repository, "repository cannot be null");
         this.economyService = Objects.requireNonNull(economyService, "economyService cannot be null");
+        this.mcMmoService = Objects.requireNonNull(mcMmoService, "mcMmoService cannot be null");
+        this.abilityService = Objects.requireNonNull(abilityService, "abilityService cannot be null");
         this.logger = plugin.getLogger();
     }
 
@@ -64,7 +73,7 @@ public final class DefaultCropMasteryService implements CropMasteryService {
                         rec.playerUuid(),
                         cropType,
                         rec.masteryXp(),
-                        rec.masteryLevel(),
+                        Math.min(CropMastery.MAX_TIER, rec.masteryLevel()),
                         CropMastery.decodeClaimedMilestones(rec.claimedMilestones() != null ? rec.claimedMilestones() : "")
                 );
                 playerMap.put(cropType, mastery);
@@ -90,91 +99,103 @@ public final class DefaultCropMasteryService implements CropMasteryService {
     }
 
     @Override
-    public void awardMasteryXp(@NotNull Player player, @NotNull CropType cropType, long xp) {
-        if (xp <= 0) return;
-        UUID uuid = player.getUniqueId();
-        CropMastery mastery = getMastery(uuid, cropType);
+    public void recordCropHarvest(@NotNull Player player, @NotNull CropType cropType, long harvestAmount, int mcMmoFarmingLevel) {
+        if (harvestAmount <= 0) return;
+        CropMastery mastery = getMastery(player.getUniqueId(), cropType);
+        int oldTier = mastery.tier();
+        mastery.recordHarvest(harvestAmount, mcMmoFarmingLevel);
+        int newTier = mastery.tier();
 
-        int oldLevel = mastery.level();
-        mastery.addXp(xp);
-        int newLevel = mastery.level();
-
-        // Check for level-up
-        if (newLevel > oldLevel) {
-            onLevelUp(player, mastery, oldLevel, newLevel);
+        if (newTier > oldTier) {
+            onTierUp(player, mastery, oldTier, newTier);
         }
 
-        // Save asynchronously
         saveAsync(mastery);
     }
 
-    private void onLevelUp(@NotNull Player player, @NotNull CropMastery mastery, int oldLevel, int newLevel) {
+    @Override
+    public void recheckAllMasteries(@NotNull Player player, int newMcMmoLevel) {
+        for (CropType crop : CropType.values()) {
+            CropMastery mastery = getMastery(player.getUniqueId(), crop);
+            int oldTier = mastery.tier();
+            mastery.recalculateTier(newMcMmoLevel);
+            int newTier = mastery.tier();
+            if (newTier > oldTier) {
+                onTierUp(player, mastery, oldTier, newTier);
+                saveAsync(mastery);
+            }
+        }
+    }
+
+    private void onTierUp(@NotNull Player player, @NotNull CropMastery mastery, int oldTier, int newTier) {
         CropType crop = mastery.cropType();
-        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.2f, 1.1f);
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.2f, 1.15f);
 
         Title title = Title.title(
-                Component.text("MASTERY LEVEL UP!", TextColor.fromHexString("#77DD77"), TextDecoration.BOLD),
-                Component.text(crop.displayName() + " Mastery Level " + newLevel + " / 30", NamedTextColor.GOLD),
-                Title.Times.times(Duration.ofMillis(200), Duration.ofMillis(1800), Duration.ofMillis(400))
+                Component.text("MASTERY TIER UP!", TextColor.fromHexString("#77DD77"), TextDecoration.BOLD),
+                Component.text(crop.displayName() + " Tier " + newTier + " / " + CropMastery.MAX_TIER, NamedTextColor.GOLD),
+                Title.Times.times(Duration.ofMillis(200), Duration.ofMillis(1600), Duration.ofMillis(400))
         );
         player.showTitle(title);
 
-        Component levelMsg = Component.text("---------------------------------------------", NamedTextColor.DARK_GRAY)
-                .append(Component.newline())
-                .append(Component.text("✦ CROP MASTERY LEVEL UP! ", NamedTextColor.GREEN, TextDecoration.BOLD))
-                .append(Component.text("[" + crop.displayName() + " " + oldLevel + " -> " + newLevel + "]", NamedTextColor.YELLOW))
-                .append(Component.newline())
-                .append(Component.text("Current Double Drop Bonus: ", NamedTextColor.GRAY))
-                .append(Component.text(String.format("+%.1f%%", mastery.getTotalDoubleDropBonus() * 100.0), NamedTextColor.AQUA, TextDecoration.BOLD));
-
-        // Check if any milestone was reached
-        for (int mLevel : MasteryMilestone.MILESTONE_LEVELS) {
-            if (newLevel >= mLevel && !mastery.isMilestoneClaimed(mLevel)) {
-                claimMilestoneReward(player, crop, mLevel);
+        for (int t = 1; t <= newTier; t++) {
+            if (!mastery.isMilestoneClaimed(t)) {
+                claimMilestoneReward(player, crop, t);
             }
         }
 
-        levelMsg = levelMsg.append(Component.newline())
-                .append(Component.text("---------------------------------------------", NamedTextColor.DARK_GRAY));
-
-        player.sendMessage(levelMsg);
+        Component summary = Component.text("✦ ", NamedTextColor.GREEN)
+                .append(Component.text(crop.displayName() + " Mastery ", NamedTextColor.GOLD, TextDecoration.BOLD))
+                .append(Component.text("Tier " + oldTier + " -> " + newTier, NamedTextColor.YELLOW, TextDecoration.BOLD))
+                .append(Component.text(" (" + mastery.getCurrentTierTitle() + ")", NamedTextColor.GRAY))
+                .hoverEvent(HoverEvent.showText(Component.text(
+                        String.format("Bonus Drops: +%.0f%% | Farming XP: +%.0f%% (Click to view)",
+                                mastery.getTotalDoubleDropBonus() * 100.0,
+                                mastery.getTotalMcMmoXpMultiplier() * 100.0),
+                        NamedTextColor.AQUA)))
+                .clickEvent(ClickEvent.runCommand("/garden mastery"));
+        player.sendMessage(summary);
     }
 
     @Override
-    public boolean claimMilestoneReward(@NotNull Player player, @NotNull CropType cropType, int milestoneLevel) {
+    public boolean claimMilestoneReward(@NotNull Player player, @NotNull CropType cropType, int milestoneTier) {
         CropMastery mastery = getMastery(player.getUniqueId(), cropType);
-        if (mastery.level() < milestoneLevel || mastery.isMilestoneClaimed(milestoneLevel)) {
+        if (mastery.tier() < milestoneTier || mastery.isMilestoneClaimed(milestoneTier)) {
             return false;
         }
 
-        // Find milestone definition
-        MasteryMilestone targetMilestone = null;
+        MasteryMilestone target = null;
         for (MasteryMilestone m : MasteryMilestone.getMilestonesFor(cropType)) {
-            if (m.level() == milestoneLevel) {
-                targetMilestone = m;
+            if (m.tier() == milestoneTier) {
+                target = m;
                 break;
             }
         }
-        if (targetMilestone == null) return false;
+        if (target == null) return false;
 
-        mastery.claimMilestone(milestoneLevel);
+        mastery.claimMilestone(milestoneTier);
 
-        // Award bonus coins via EconomyService
-        int bonusCoins = targetMilestone.bonusCoinsPerHarvest();
-        if (bonusCoins > 0) {
+        int coinReward = target.coinReward();
+        if (coinReward > 0) {
             economyService.deposit(
                     player.getUniqueId(),
                     "coins",
-                    BigDecimal.valueOf(bonusCoins),
-                    "Crop Mastery Milestone L" + milestoneLevel + " (" + cropType.name() + ")",
-                    "mastery-" + cropType.name().toLowerCase() + "-" + milestoneLevel + "-" + player.getUniqueId()
-            );
+                    BigDecimal.valueOf(coinReward),
+                    "Crop Mastery Tier " + milestoneTier + " (" + cropType.name() + ")",
+                    "mastery-t" + milestoneTier + "-" + cropType.name().toLowerCase() + "-" + player.getUniqueId()
+            ).whenComplete((res, err) -> {
+                if (err != null) {
+                    logger.warning("Failed Crop Mastery coin deposit for " + player.getName() + ": " + err.getMessage());
+                } else if (res != null && !res.isSuccess()) {
+                    logger.warning("Crop Mastery coin deposit rejected for " + player.getName() + ": " + res.message());
+                }
+            });
         }
 
-        player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.2f, 1.2f);
-        player.sendMessage(Component.text("[!] Milestone Unlocked: ", NamedTextColor.GOLD, TextDecoration.BOLD)
-                .append(Component.text(targetMilestone.title() + " (Level " + milestoneLevel + ")! ", NamedTextColor.YELLOW))
-                .append(Component.text(targetMilestone.description() + " [+" + bonusCoins + " Coins]", NamedTextColor.AQUA)));
+        player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.9f, 1.2f);
+        player.sendMessage(Component.text("  ★ ", NamedTextColor.GOLD)
+                .append(Component.text(target.title() + " Reward: ", NamedTextColor.YELLOW))
+                .append(Component.text("+" + coinReward + " Coins", NamedTextColor.AQUA)));
 
         saveAsync(mastery);
         return true;
@@ -182,12 +203,12 @@ public final class DefaultCropMasteryService implements CropMasteryService {
 
     @Override
     public void openMasteryGui(@NotNull Player player) {
-        CropMasteryGui.openOverview(player, this);
+        CropMasteryGui.openOverview(player, this, mcMmoService, abilityService);
     }
 
     @Override
     public void openCropDetailGui(@NotNull Player player, @NotNull CropType cropType) {
-        CropMasteryGui.openCropDetail(player, cropType, this);
+        CropMasteryGui.openCropDetail(player, cropType, this, mcMmoService);
     }
 
     private void saveAsync(@NotNull CropMastery mastery) {
@@ -196,8 +217,8 @@ public final class DefaultCropMasteryService implements CropMasteryService {
                 repository.saveCropMastery(new FarmingRepository.CropMasteryRecord(
                         mastery.playerUuid(),
                         mastery.cropType().name(),
-                        mastery.masteryXp(),
-                        mastery.level(),
+                        mastery.harvestCount(),
+                        mastery.tier(),
                         mastery.encodeClaimedMilestones(),
                         Instant.now()
                 ));

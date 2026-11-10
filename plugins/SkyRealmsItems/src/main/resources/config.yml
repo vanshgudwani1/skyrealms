@@ -1,0 +1,9 @@
+# SkyRealms Items Configuration
+recipes:
+  register-survival-recipes: true
+
+stats:
+  speed-sync-interval-ticks: 20
+
+enchantments:
+  block-vanilla-on-custom-items: true

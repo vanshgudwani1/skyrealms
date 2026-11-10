@@ -27,7 +27,6 @@ public final class GardenItemFactory {
     public static final String ID_ENCHANTED_HAY_BALE = "enchanted_hay_bale";
     public static final String ID_ENCHANTED_CARROT = "enchanted_carrot";
     public static final String ID_ENCHANTED_SUGAR_CANE = "enchanted_sugar_cane";
-    public static final String ID_NOVICE_HOE = "novice_cultivator_hoe";
 
     private GardenItemFactory() {}
 
@@ -134,44 +133,6 @@ public final class GardenItemFactory {
 
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
         pdc.set(CUSTOM_ITEM_KEY, PersistentDataType.STRING, ID_ENCHANTED_SUGAR_CANE);
-
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    /**
-     * Creates Elarion's Novice Cultivator Hoe given as starter supply.
-     */
-    @NotNull
-    public static ItemStack createNoviceHoe() {
-        ItemStack item = new ItemStack(Material.STONE_HOE);
-        ItemMeta meta = item.getItemMeta();
-        if (meta == null) return item;
-
-        meta.displayName(Component.text("🌱 Novice Cultivator Hoe", NamedTextColor.GREEN, TextDecoration.BOLD)
-                .decoration(TextDecoration.ITALIC, false));
-
-        List<Component> lore = new ArrayList<>();
-        lore.add(Component.text("✦ Elarion's Starter Implement ✦", NamedTextColor.YELLOW)
-                .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.empty());
-        lore.add(Component.text("A balanced, durable farming hoe blessed", NamedTextColor.GRAY)
-                .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("by the Keeper of the Sakura Garden.", NamedTextColor.GRAY)
-                .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.empty());
-        lore.add(Component.text("Ability: ", NamedTextColor.GOLD)
-                .append(Component.text("Quick Till", NamedTextColor.YELLOW))
-                .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text("• Prepares farmland with 100% moisture retention.", NamedTextColor.DARK_GRAY)
-                .decoration(TextDecoration.ITALIC, false));
-        meta.lore(lore);
-
-        meta.addEnchant(Enchantment.UNBREAKING, 3, true);
-        meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
-
-        PersistentDataContainer pdc = meta.getPersistentDataContainer();
-        pdc.set(CUSTOM_ITEM_KEY, PersistentDataType.STRING, ID_NOVICE_HOE);
 
         item.setItemMeta(meta);
         return item;

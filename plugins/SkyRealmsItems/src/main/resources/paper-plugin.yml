@@ -1,0 +1,21 @@
+name: SkyRealmsItems
+version: '1.0.0'
+main: com.skyrealms.items.SkyRealmsItemsPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Upgradable Farming Hoes and vanilla-enchant protection for SkyRealms.
+prefix: SkyRealms-Items
+dependencies:
+  server:
+    SkyRealmsCore:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsEconomy:
+      load: BEFORE
+      required: false
+      join-classpath: false
+    EliteEnchantments:
+      load: BEFORE
+      required: false
+      join-classpath: true

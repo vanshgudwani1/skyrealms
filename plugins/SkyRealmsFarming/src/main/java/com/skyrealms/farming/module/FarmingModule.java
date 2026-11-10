@@ -4,21 +4,28 @@ import com.skyrealms.economy.service.EconomyService;
 import com.skyrealms.farming.command.FarmCommand;
 import com.skyrealms.farming.command.GardenCommand;
 import com.skyrealms.farming.garden.*;
+import com.skyrealms.farming.garden.ability.GardenAbilityService;
+import com.skyrealms.farming.garden.ability.GardenHarvestAndAbilityListener;
+import com.skyrealms.farming.garden.ability.VerdantAuraManager;
 import com.skyrealms.farming.garden.cinematic.DivineCinematicService;
-import com.skyrealms.farming.garden.intro.ElarionListener;
-import com.skyrealms.farming.garden.intro.ElarionService;
+import com.skyrealms.farming.garden.harvest.GardenBalanceConfig;
+import com.skyrealms.farming.garden.harvest.HarvestRewardPipeline;
 import com.skyrealms.farming.garden.item.GardenItemFactory;
-import com.skyrealms.farming.garden.mastery.CropMasteryListener;
+import com.skyrealms.farming.garden.journal.BotanicalJournalService;
+import com.skyrealms.farming.garden.journal.DefaultBotanicalJournalService;
+import com.skyrealms.farming.garden.mastery.CropMasteryGuiListener;
 import com.skyrealms.farming.garden.mastery.CropMasteryService;
 import com.skyrealms.farming.garden.mastery.DefaultCropMasteryService;
 import com.skyrealms.farming.garden.offering.DefaultOfferingService;
 import com.skyrealms.farming.garden.offering.OfferingListener;
 import com.skyrealms.farming.garden.offering.OfferingService;
-import com.skyrealms.farming.garden.quest.DefaultFarmingQuestService;
-import com.skyrealms.farming.garden.quest.FarmingQuestListener;
-import com.skyrealms.farming.garden.quest.FarmingQuestService;
+import com.skyrealms.farming.garden.plot.GardenPlotCustomizationService;
+import com.skyrealms.farming.garden.plot.PlotEditorAndPlantListener;
+import com.skyrealms.farming.garden.plot.PlotEditorService;
 import com.skyrealms.farming.gui.FarmingGui;
 import com.skyrealms.farming.listener.FarmingListener;
+import com.skyrealms.farming.mcmmo.McMMOFarmingService;
+import com.skyrealms.farming.mcmmo.McMMOIntegrationListener;
 import com.skyrealms.farming.mutation.CropMutationEngine;
 import com.skyrealms.farming.repository.FarmingRepository;
 import com.skyrealms.farming.service.*;
@@ -38,8 +45,8 @@ import java.util.Objects;
 
 /**
  * SkyRealms Farming Module.
- * Completely redesigned natural progression Garden Engine with shared skyrealms_garden world,
- * 256x256 isolated regions, 16 crop plots (2x8) in a glass greenhouse dome, and retired generator mechanics.
+ * Integrates mcMMO (Farming/Herbalism only) with the Sakura Glass Garden conservatory,
+ * centralized HarvestRewardPipeline, Garden-only abilities, Crop Mastery, and Botanical Journal.
  */
 public final class FarmingModule implements SkyModule {
 
@@ -96,19 +103,17 @@ public final class FarmingModule implements SkyModule {
             islandService = context.services().get(IslandService.class);
         }
 
-        // 1. Initialize Repositories and Engines
+        // 1. Repositories, Collections, Legacy Retirement Support
         FarmingRepository repository = new FarmingRepository(databaseService);
         this.progressionService = new FarmingProgressionService(repository, context.eventBus());
         CropMutationEngine mutationEngine = new CropMutationEngine(
                 plugin.getConfig().getDouble("generator.mutations.base-chance", 0.015),
                 plugin.getConfig().getDouble("generator.upgrades.mutation.bonus-mutation-chance-per-level", 0.005)
         );
-
         FarmingUpgradeService upgradeService = new FarmingUpgradeService(repository, economyService, context.eventBus());
 
         Material coreMaterial = Material.matchMaterial(plugin.getConfig().getString("generator.default.core-material", "LODESTONE"));
         if (coreMaterial == null) coreMaterial = Material.LODESTONE;
-
         int maxGenerators = plugin.getConfig().getInt("generator.default.max-generators-per-island", 5);
         FarmingGeneratorValidator validator = new FarmingGeneratorValidator(islandService, coreMaterial, maxGenerators);
 
@@ -120,68 +125,111 @@ public final class FarmingModule implements SkyModule {
         this.generatorManager = new FarmingGeneratorManager(plugin, repository, validator, context.eventBus(), islandService);
         generatorManager.setServices(hologramService, terraformService, overclockManager, comboTracker, economyService, progressionService);
 
-        // 2. Initialize SkyRealms Garden Foundation (World, Allocator, Dome Generator)
+        // 2. SkyRealms Garden Foundation (World, Allocator, Dome Generator)
+        GardenBalanceConfig balanceConfig = GardenBalanceConfig.fromConfig(plugin.getConfig());
         GardenWorldManager worldManager = new GardenWorldManager(plugin);
         worldManager.getOrCreateGardenWorld();
-        GardenSpatialAllocator allocator = new GardenSpatialAllocator(512, 256);
+        GardenSpatialAllocator allocator = new GardenSpatialAllocator(
+                plugin.getConfig().getInt("garden.grid.spacing", GardenSpatialAllocator.DEFAULT_SPACING),
+                plugin.getConfig().getInt("garden.grid.region-size", GardenSpatialAllocator.DEFAULT_REGION_SIZE)
+        );
         this.gardenService = new DefaultGardenService(plugin, repository, worldManager, allocator, islandService);
 
         FarmingGeneratorProcessor processor = new FarmingGeneratorProcessor(
                 plugin, progressionService, mutationEngine, repository, context.eventBus(),
                 hologramService, overclockManager, comboTracker
         );
-
         this.farmingService = new DefaultFarmingService(generatorManager, progressionService, upgradeService, mutationEngine, islandService, gardenService);
 
-        // 3. Register Core Services
         context.services().register(FarmingService.class, farmingService);
         context.services().register(GardenService.class, gardenService);
         Bukkit.getServicesManager().register(FarmingService.class, farmingService, plugin, ServicePriority.High);
         Bukkit.getServicesManager().register(GardenService.class, gardenService, plugin, ServicePriority.High);
 
-        // Phase G3 & G4 Services
+        // 3. Offering, mcMMO Farming Bridge, Garden Abilities, Crop Mastery, Botanical Journal & Reward Pipeline
         DivineCinematicService cinematicService = new DivineCinematicService(plugin, gardenService, repository, islandService);
         DefaultOfferingService offeringService = new DefaultOfferingService(plugin, repository, islandService, cinematicService);
-        DefaultFarmingQuestService questService = new DefaultFarmingQuestService(plugin, repository, progressionService, economyService);
-        ElarionService elarionService = new ElarionService(plugin, repository, questService);
-        DefaultCropMasteryService masteryService = new DefaultCropMasteryService(plugin, repository, economyService);
+        McMMOFarmingService mcMmoService = new McMMOFarmingService();
+        GardenAbilityService abilityService = new GardenAbilityService(balanceConfig);
+        VerdantAuraManager auraManager = new VerdantAuraManager(gardenService, islandService, mcMmoService, balanceConfig);
+        DefaultCropMasteryService masteryService = new DefaultCropMasteryService(plugin, repository, economyService, mcMmoService, abilityService);
+        DefaultBotanicalJournalService journalService = new DefaultBotanicalJournalService(plugin, repository, progressionService, masteryService, mcMmoService);
 
-        // Register custom offering crafting recipes
+        HarvestRewardPipeline rewardPipeline = new HarvestRewardPipeline(
+                balanceConfig,
+                abilityService,
+                mcMmoService,
+                masteryService,
+                progressionService,
+                journalService,
+                economyService,
+                auraManager,
+                context.eventBus(),
+                plugin.getLogger()
+        );
+
         GardenItemFactory.registerRecipes(plugin);
 
+        GardenPlotCustomizationService customizationService = new GardenPlotCustomizationService(
+                plugin, repository, gardenService, economyService, mcMmoService, masteryService
+        );
+        PlotEditorService editorService = new PlotEditorService(
+                gardenService, islandService, customizationService, mcMmoService
+        );
+
         context.services().register(OfferingService.class, offeringService);
-        context.services().register(FarmingQuestService.class, questService);
+        context.services().register(McMMOFarmingService.class, mcMmoService);
+        context.services().register(GardenAbilityService.class, abilityService);
         context.services().register(CropMasteryService.class, masteryService);
+        context.services().register(BotanicalJournalService.class, journalService);
+        context.services().register(HarvestRewardPipeline.class, rewardPipeline);
+        context.services().register(GardenPlotCustomizationService.class, customizationService);
+        context.services().register(PlotEditorService.class, editorService);
+
         Bukkit.getServicesManager().register(OfferingService.class, offeringService, plugin, ServicePriority.High);
-        Bukkit.getServicesManager().register(FarmingQuestService.class, questService, plugin, ServicePriority.High);
+        Bukkit.getServicesManager().register(McMMOFarmingService.class, mcMmoService, plugin, ServicePriority.High);
+        Bukkit.getServicesManager().register(GardenAbilityService.class, abilityService, plugin, ServicePriority.High);
         Bukkit.getServicesManager().register(CropMasteryService.class, masteryService, plugin, ServicePriority.High);
+        Bukkit.getServicesManager().register(BotanicalJournalService.class, journalService, plugin, ServicePriority.High);
+        Bukkit.getServicesManager().register(HarvestRewardPipeline.class, rewardPipeline, plugin, ServicePriority.High);
+        Bukkit.getServicesManager().register(GardenPlotCustomizationService.class, customizationService, plugin, ServicePriority.High);
+        Bukkit.getServicesManager().register(PlotEditorService.class, editorService, plugin, ServicePriority.High);
 
         // 4. Register Event Listeners
-        NaturalFarmingEngine naturalEngine = new NaturalFarmingEngine(plugin, gardenService, progressionService, context.eventBus());
-        NaturalFarmingListener naturalFarmingListener = new NaturalFarmingListener(gardenService, naturalEngine, context.eventBus());
         FarmingListener farmingListener = new FarmingListener(farmingService, processor, islandService);
         GardenProtectionListener gardenProtectionListener = new GardenProtectionListener(gardenService, islandService);
         OfferingListener offeringListener = new OfferingListener(offeringService, islandService, cinematicService);
-        FarmingQuestListener questListener = new FarmingQuestListener(gardenService, questService, context.eventBus());
-        ElarionListener elarionListener = new ElarionListener(gardenService, elarionService);
-        CropMasteryListener masteryListener = new CropMasteryListener(masteryService, context.eventBus());
+        McMMOIntegrationListener mcMmoListener = new McMMOIntegrationListener(gardenService, islandService, masteryService, abilityService);
+        GardenHarvestAndAbilityListener harvestAndAbilityListener = new GardenHarvestAndAbilityListener(
+                gardenService, islandService, mcMmoService, abilityService, masteryService, journalService, rewardPipeline,
+                customizationService, editorService
+        );
+        CropMasteryGuiListener guiListener = new CropMasteryGuiListener(masteryService, journalService, mcMmoService, abilityService, auraManager);
+        PlotEditorAndPlantListener plotEditorListener = new PlotEditorAndPlantListener(
+                gardenService, customizationService, editorService, mcMmoService, repository
+        );
 
-        Bukkit.getPluginManager().registerEvents(naturalFarmingListener, plugin);
         Bukkit.getPluginManager().registerEvents(farmingListener, plugin);
         Bukkit.getPluginManager().registerEvents(gardenProtectionListener, plugin);
         Bukkit.getPluginManager().registerEvents(offeringListener, plugin);
-        Bukkit.getPluginManager().registerEvents(questListener, plugin);
-        Bukkit.getPluginManager().registerEvents(elarionListener, plugin);
-        Bukkit.getPluginManager().registerEvents(masteryListener, plugin);
+        Bukkit.getPluginManager().registerEvents(mcMmoListener, plugin);
+        Bukkit.getPluginManager().registerEvents(auraManager, plugin);
+        Bukkit.getPluginManager().registerEvents(harvestAndAbilityListener, plugin);
+        Bukkit.getPluginManager().registerEvents(guiListener, plugin);
+        Bukkit.getPluginManager().registerEvents(plotEditorListener, plugin);
         Bukkit.getPluginManager().registerEvents(new FarmingGui(farmingService, FarmingGui.GuiType.MAIN_MENU, net.kyori.adventure.text.Component.empty(), null), plugin);
 
         // 5. Register /garden and /farm commands via DynamicCommandRegistrar
-        GardenCommand gardenCommand = new GardenCommand(gardenService, islandService, offeringService, masteryService, questService, elarionService);
+        GardenCommand gardenCommand = new GardenCommand(
+                gardenService, islandService, offeringService, masteryService,
+                mcMmoService, abilityService, auraManager, journalService,
+                customizationService, editorService
+        );
         DynamicCommandRegistrar.register(
                 "skyrealms",
                 "garden",
                 "Primary SkyRealms Greenhouse Garden command",
-                "/garden [home|leave|info|plots|help]",
+                "/garden [home|leave|info|plots|plot|mastery|abilities|journal|help]",
                 List.of("g"),
                 "skyrealms.garden.base",
                 PermissionDefault.TRUE,
@@ -205,7 +253,7 @@ public final class FarmingModule implements SkyModule {
         );
 
         state = ModuleState.ENABLED;
-        context.logger().info("SkyRealms Farming module enabled with Greenhouse Garden Foundation. Generators safely retired.");
+        context.logger().info("SkyRealms Farming enabled: RewardPipeline + mcMMO Farming + Garden Abilities + Crop Mastery + Botanical Journal.");
     }
 
     @Override
