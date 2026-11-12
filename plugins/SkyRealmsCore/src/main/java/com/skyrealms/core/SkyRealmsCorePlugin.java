@@ -1,6 +1,7 @@
 package com.skyrealms.core;
 
 import com.skyrealms.core.command.SkyRealmsCommand;
+import com.skyrealms.core.command.WorldCommand;
 import com.skyrealms.core.module.CoreModule;
 import com.skyrealms.platform.api.event.EventBus;
 import com.skyrealms.platform.api.module.ModuleLifecycleManager;
@@ -100,6 +101,19 @@ public final class SkyRealmsCorePlugin extends JavaPlugin implements Listener {
                 commandHandler
         );
 
+        WorldCommand worldCommand = new WorldCommand();
+        DynamicCommandRegistrar.register(
+                "skyrealms",
+                "tpworld",
+                "Load and teleport to any server world",
+                "/tpworld [world]",
+                java.util.List.of("visitworld", "worlds"),
+                "skyrealms.admin",
+                org.bukkit.permissions.PermissionDefault.OP,
+                "§cYou do not have permission to use /tpworld.",
+                worldCommand
+        );
+
         slf4jLogger.info("SkyRealms Core plugin successfully started. Awaiting complete server load to activate modules.");
     }
 
@@ -108,6 +122,11 @@ public final class SkyRealmsCorePlugin extends JavaPlugin implements Listener {
         if (getConfig().getBoolean("modules.auto-enable-on-boot", true)) {
             getSLF4JLogger().info("Server load completed ({}); activating all registered SkyRealms modules...", event.getType());
             lifecycleManager.enableAll();
+        }
+        for (String extraWorld : getConfig().getStringList("extra-worlds")) {
+            if (WorldCommand.loadWorldIfPresent(extraWorld) != null) {
+                getSLF4JLogger().info("Loaded configured extra world '{}'.", extraWorld);
+            }
         }
     }
 

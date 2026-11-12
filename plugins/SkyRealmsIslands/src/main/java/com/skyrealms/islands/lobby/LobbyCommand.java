@@ -52,14 +52,12 @@ public final class LobbyCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(Component.text("You do not have permission to execute this command.", NamedTextColor.RED));
                 return true;
             }
-            sender.sendMessage(Component.text("🌸 Re-generating Celestial Dragon Nest Lobby...", NamedTextColor.LIGHT_PURPLE));
-            lobbyService.initLobby(true).thenAccept(success -> {
-                if (success) {
-                    sender.sendMessage(Component.text("✔ Celestial Dragon Nest Lobby regenerated successfully!", NamedTextColor.GREEN));
-                } else {
-                    sender.sendMessage(Component.text("✖ Failed to regenerate lobby. Check server logs.", NamedTextColor.RED));
-                }
-            });
+            World world = Bukkit.getWorld("world");
+            if (world != null) {
+                lobbyService.getHologramService().spawnAllHolograms(world);
+                lobbyService.startCoreParticleEngine(world);
+                sender.sendMessage(Component.text("✔ Refreshed animated Sakura Hub pedestals & visuals.", NamedTextColor.GREEN));
+            }
             return true;
         }
 

@@ -80,5 +80,14 @@ class LobbyVoidRescueTest {
         verify(damageEvent, org.mockito.Mockito.never()).setCancelled(true);
         verify(player, org.mockito.Mockito.never()).teleportAsync(spawnLoc);
     }
+
+    @Test
+    void defaultLobbyStationsExposeDistinctNonBlankCommands() {
+        java.util.List<LobbyStation> stations = LobbyStation.DEFAULT_STATIONS;
+        org.assertj.core.api.Assertions.assertThat(stations).hasSize(6);
+        org.assertj.core.api.Assertions.assertThat(stations)
+                .extracting(LobbyStation::command)
+                .containsExactlyInAnyOrder("island", "garden", "pets", "menu", "items", "balance");
+    }
 }
 

@@ -75,8 +75,8 @@ SkyRealms is built as a **Modular Monolith** using decoupled Paper plugin JARs c
 ### 2. Runtime Plugins (`/plugins`)
 | Plugin JAR | Description & Systems |
 | :--- | :--- |
-| **`SkyRealmsCore`** | **Platform Kernel**: Bootstraps the platform runtime, coordinates the DAG lifecycle, and manages dynamic commands. |
-| **`SkyRealmsDatabase`** | **Data Engine**: HikariCP connection pool, Flyway database migrations (V1 to V9), automatic failover from PostgreSQL to local H2. |
+| **`SkyRealmsCore`** | **Platform Kernel**: Bootstraps the platform runtime, coordinates the DAG lifecycle, manages dynamic commands, and provides `/tpworld` & `extra-worlds` void-world loading. |
+| **`SkyRealmsDatabase`** | **Data Engine**: HikariCP connection pool, Flyway database migrations (V1 to V10), automatic failover from PostgreSQL to local H2. |
 | **`SkyRealmsPlayer`** | **Identity & Profiles**: Prelogin asynchronous profile caching (zero main-thread hitches), playtime statistics, personal settings. |
 | **`SkyRealmsEconomy`** | **Banking & Ledger**: Multi-currency engine (Coins & Gems), transactional double-entry ledger, full Vault economy provider. |
 | **`SkyRealmsIslands`** | **SkyBlock Islands**: Deterministic 2D spiral allocator (500-block spacing), dedicated void world `skyrealms_islands`, cooperative roles & permissions, boundary protection, Sakura Hub spawn & island void rescue. |
@@ -84,6 +84,7 @@ SkyRealms is built as a **Modular Monolith** using decoupled Paper plugin JARs c
 | **`SkyRealmsItems`** | **Custom Gear & Enchants**: Upgradable farming hoes, custom enchant controller (`EliteEnchantments`), vanilla enchant blocker, and stat providers. |
 | **`SkyRealmsPets`** | **3D Companions**: Cubees ModelEngine v4 pets, custom `/pets` GUI, pet XP progression, and Farming Fortune bonuses. |
 | **`SkyRealmsPlaceholders`** | **TAB & PAPI Bridge**: Registers `%skyrealms_*%` PlaceholderAPI expansion backed by cached SkyRealms/LuckPerms/mcMMO metrics. |
+| **`SkyRealmsEnd`** | **End Civilization**: 7 End districts, 35 interactive NPCs, Melee/Archery/Mage combat training & leaderboards, quest chains & reputation, Vaelkor boss encounter, End gear catalog, and Dragon qualification. |
 
 ---
 

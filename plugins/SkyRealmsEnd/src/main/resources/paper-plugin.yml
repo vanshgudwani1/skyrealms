@@ -1,0 +1,30 @@
+name: SkyRealmsEnd
+version: '1.0.0'
+main: com.skyrealms.end.SkyRealmsEndPlugin
+api-version: '1.21'
+author: SkyRealms Team
+description: Living End Civilization progression, districts, NPCs, training, quests, and Dragon qualification for SkyRealms.
+prefix: SkyRealms-End
+dependencies:
+  server:
+    SkyRealmsCore:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsDatabase:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsPlayer:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsEconomy:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SkyRealmsItems:
+      load: BEFORE
+      required: true
+      join-classpath: true
+

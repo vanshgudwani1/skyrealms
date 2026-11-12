@@ -21,6 +21,9 @@ import java.util.Objects;
 public final class ArmorAttributeTask {
 
     private static final NamespacedKey SPEED_MOD_KEY = new NamespacedKey("skyrealms", "gear_walk_speed");
+    private static final NamespacedKey HEALTH_MOD_KEY = new NamespacedKey("skyrealms", "gear_max_health");
+    private static final NamespacedKey DEFENSE_MOD_KEY = new NamespacedKey("skyrealms", "gear_defense");
+    private static final NamespacedKey DAMAGE_MOD_KEY = new NamespacedKey("skyrealms", "gear_combat_damage");
 
     private final Plugin plugin;
     private final ItemRegistryService itemService;
@@ -58,12 +61,25 @@ public final class ArmorAttributeTask {
         SkyItemStats stats = itemService.getPlayerEquippedStats(player);
         syncModifier(player, Attribute.GENERIC_MOVEMENT_SPEED, SPEED_MOD_KEY,
                 stats.speedBonus(), AttributeModifier.Operation.ADD_SCALAR);
+        syncModifier(player, Attribute.GENERIC_MAX_HEALTH, HEALTH_MOD_KEY,
+                stats.maxHealthBonus(), AttributeModifier.Operation.ADD_NUMBER);
+        syncModifier(player, Attribute.GENERIC_ARMOR, DEFENSE_MOD_KEY,
+                stats.defense(), AttributeModifier.Operation.ADD_NUMBER);
+        syncModifier(player, Attribute.GENERIC_ATTACK_DAMAGE, DAMAGE_MOD_KEY,
+                stats.combatDamage(), AttributeModifier.Operation.ADD_NUMBER);
     }
 
     public void clearPlayerModifiers(@NotNull Player player) {
-        AttributeInstance instance = player.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);
-        if (instance != null && instance.getModifier(SPEED_MOD_KEY) != null) {
-            instance.removeModifier(SPEED_MOD_KEY);
+        removeMod(player, Attribute.GENERIC_MOVEMENT_SPEED, SPEED_MOD_KEY);
+        removeMod(player, Attribute.GENERIC_MAX_HEALTH, HEALTH_MOD_KEY);
+        removeMod(player, Attribute.GENERIC_ARMOR, DEFENSE_MOD_KEY);
+        removeMod(player, Attribute.GENERIC_ATTACK_DAMAGE, DAMAGE_MOD_KEY);
+    }
+
+    private static void removeMod(Player player, Attribute attr, NamespacedKey key) {
+        AttributeInstance instance = player.getAttribute(attr);
+        if (instance != null && instance.getModifier(key) != null) {
+            instance.removeModifier(key);
         }
     }
 

@@ -89,10 +89,10 @@ public final class LobbyService {
      */
     public CompletableFuture<Boolean> initLobby(boolean force) {
         if (!force && isLobbyInitialized()) {
-            LOGGER.info("Lobby is already initialized according to marker flag. Clearing legacy holograms & starting ambient particles...");
+            LOGGER.info("Lobby initialized: spawning animated Sakura Hub pedestals, core relic & particles...");
             World world = Bukkit.getWorld("world");
             if (world != null) {
-                hologramService.clearHolograms(world);
+                hologramService.spawnAllHolograms(world);
                 startCoreParticleEngine(world);
             }
             return CompletableFuture.completedFuture(true);
@@ -316,7 +316,18 @@ public final class LobbyService {
     }
 
     /**
-     * Ambient live particle engine revolving above the central lobby spawn dais.
+     * Stops lobby animation tasks and clears non-persistent display entities cleanly.
+     */
+    public void shutdown() {
+        if (coreParticleTask != null && !coreParticleTask.isCancelled()) {
+            coreParticleTask.cancel();
+            coreParticleTask = null;
+        }
+        hologramService.clearHolograms(Bukkit.getWorld("world"));
+    }
+
+    /**
+     * Ambient animation loop driving smooth 3D relic interpolation, banner shimmer, and sakura breeze particles.
      */
     public void startCoreParticleEngine(World world) {
         if (coreParticleTask != null && !coreParticleTask.isCancelled()) {
@@ -324,11 +335,11 @@ public final class LobbyService {
         }
 
         Location spawn = getLobbySpawnLocation();
-        final Location coreLoc = new Location(world, spawn.getX(), spawn.getY() + 2.5, spawn.getZ());
+        final Location coreLoc = new Location(world, spawn.getX(), spawn.getY() + 3.2, spawn.getZ());
 
         coreParticleTask = new BukkitRunnable() {
             double angle = 0.0;
-            int tickCounter = 0;
+            int stepCounter = 0;
 
             @Override
             public void run() {
@@ -336,35 +347,38 @@ public final class LobbyService {
                     return;
                 }
 
-                // Orbital ring 1: Cherry leaves revolving horizontally (Radius 1.8)
-                double x1 = Math.cos(angle) * 1.8;
-                double z1 = Math.sin(angle) * 1.8;
-                world.spawnParticle(Particle.CHERRY_LEAVES, coreLoc.getX() + x1, coreLoc.getY(), coreLoc.getZ() + z1, 1, 0, 0, 0, 0);
+                // Client-interpolated 3D rotation & vertical bobbing across core + pedestals
+                hologramService.animateStep(angle, stepCounter);
 
-                // Orbital ring 2: End rod revolving diagonally
-                double x2 = Math.cos(angle + Math.PI) * 1.8;
-                double z2 = Math.sin(angle + Math.PI) * 1.8;
-                double y2 = Math.sin(angle * 2.0) * 0.6;
+                // Revolving cherry petals & fireflies around the central Sakura Core
+                double x1 = Math.cos(angle) * 2.1;
+                double z1 = Math.sin(angle) * 2.1;
+                world.spawnParticle(Particle.CHERRY_LEAVES, coreLoc.getX() + x1, coreLoc.getY(), coreLoc.getZ() + z1, 2, 0.15, 0.1, 0.15, 0.01);
+
+                double x2 = Math.cos(angle + Math.PI) * 2.1;
+                double z2 = Math.sin(angle + Math.PI) * 2.1;
+                double y2 = Math.sin(angle * 2.0) * 0.5;
                 world.spawnParticle(Particle.END_ROD, coreLoc.getX() + x2, coreLoc.getY() + y2, coreLoc.getZ() + z2, 1, 0, 0, 0, 0.01);
 
-                // Gentle purple stardust at center
-                if (tickCounter % 3 == 0) {
-                    world.spawnParticle(Particle.DRAGON_BREATH, coreLoc.getX(), coreLoc.getY() + 0.2, coreLoc.getZ(), 1, 0.08, 0.08, 0.08, 0.01);
+                // Gentle falling blossom canopy across spawn courtyard & pedestals
+                world.spawnParticle(Particle.CHERRY_LEAVES, spawn.getX(), spawn.getY() + 3.5, spawn.getZ(), 5, 7.5, 1.5, 7.5, 0.02);
+                if (stepCounter % 2 == 0) {
+                    for (LobbyStation station : LobbyStation.DEFAULT_STATIONS) {
+                        world.spawnParticle(Particle.END_ROD, station.x(), station.y() + 1.4, station.z(), 1, 0.35, 0.25, 0.35, 0.005);
+                    }
                 }
 
-                // Periodic gentle chime & particle ripple (every 5 seconds / 33 ticks)
-                if (tickCounter % 33 == 0) {
-                    world.playSound(coreLoc, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.3f);
-                    world.spawnParticle(Particle.CHERRY_LEAVES, coreLoc, 15, 1.2, 0.2, 1.2, 0.05);
+                if (stepCounter % 16 == 0) {
+                    world.playSound(coreLoc, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.4f, 1.35f);
                 }
 
-                angle += 0.18;
-                if (angle > Math.PI * 2) {
+                angle += Math.PI / 6.0;
+                if (angle >= Math.PI * 200) {
                     angle = 0.0;
                 }
-                tickCounter++;
+                stepCounter++;
             }
-        }.runTaskTimer(plugin, 20L, 3L);
+        }.runTaskTimer(plugin, 20L, 10L);
     }
 
     /**

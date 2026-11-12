@@ -17,6 +17,7 @@ include("plugins:SkyRealmsFarming")
 include("plugins:SkyRealmsItems")
 include("plugins:SkyRealmsPets")
 include("plugins:SkyRealmsPlaceholders")
+include("plugins:SkyRealmsEnd")
 
 pluginManagement {
     repositories {

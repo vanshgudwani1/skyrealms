@@ -34,6 +34,7 @@ public final class IslandsModule implements SkyModule {
     private ModuleState state = ModuleState.UNLOADED;
 
     private IslandManager islandManager;
+    private com.skyrealms.islands.lobby.LobbyService lobbyService;
 
     public IslandsModule(@NotNull JavaPlugin plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin cannot be null");
@@ -130,7 +131,7 @@ public final class IslandsModule implements SkyModule {
         );
 
         // 6. Initialize Celestial Sakura Lobby Service & Commands
-        com.skyrealms.islands.lobby.LobbyService lobbyService = new com.skyrealms.islands.lobby.LobbyService(plugin);
+        this.lobbyService = new com.skyrealms.islands.lobby.LobbyService(plugin);
         islandManager.setTeleportWarmupService(lobbyService.getTeleportWarmupService());
         com.skyrealms.islands.lobby.LobbyListener lobbyListener = new com.skyrealms.islands.lobby.LobbyListener(plugin, lobbyService, islandManager);
         Bukkit.getPluginManager().registerEvents(lobbyListener, plugin);
@@ -158,6 +159,11 @@ public final class IslandsModule implements SkyModule {
     @Override
     public void onDisable(@NotNull ModuleContext context) throws Exception {
         context.logger().info("Disabling SkyRealms Islands module...");
+
+        if (lobbyService != null) {
+            lobbyService.shutdown();
+            lobbyService = null;
+        }
 
         if (islandManager != null) {
             islandManager.close();

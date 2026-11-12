@@ -210,9 +210,11 @@ public final class SkyRealmsItemFactory {
         SkyItemStats scaled = HoeUpgradeService.scaleStats(def, level);
         List<Component> lore = new ArrayList<>();
 
-        lore.add(Component.text(def.domain().displayName() + " Hoe • Tier Level " + level + "/" + HoeUpgradeService.MAX_LEVEL_PER_TIER,
-                        NamedTextColor.DARK_GRAY)
-                .decoration(TextDecoration.ITALIC, false));
+        String subtitle = def.domain() == com.skyrealms.items.model.ItemDomain.FARMING
+                ? def.domain().displayName() + " Hoe • Tier Level " + level + "/" + HoeUpgradeService.MAX_LEVEL_PER_TIER
+                : def.domain().displayName() + " • Quality Tier " + level + "/" + HoeUpgradeService.MAX_LEVEL_PER_TIER;
+        lore.add(Component.text(subtitle, NamedTextColor.DARK_GRAY)
+                        .decoration(TextDecoration.ITALIC, false));
         lore.add(Component.empty());
 
         appendStatsLore(lore, scaled);
@@ -241,7 +243,13 @@ public final class SkyRealmsItemFactory {
         lore.add(Component.empty());
         lore.add(Component.text("Custom Enchants Allowed • Vanilla Enchants Blocked", NamedTextColor.DARK_AQUA)
                 .decoration(TextDecoration.ITALIC, false));
-        lore.add(Component.text(def.rarity().label() + " HOE", def.rarity().color(), TextDecoration.BOLD)
+        String slotTag = switch (def.domain()) {
+            case FARMING -> "HOE";
+            case ARMOR -> def.slot().name();
+            case UTILITY -> "MATERIAL";
+            default -> "WEAPON";
+        };
+        lore.add(Component.text(def.rarity().label() + " " + slotTag, def.rarity().color(), TextDecoration.BOLD)
                 .decoration(TextDecoration.ITALIC, false));
         return lore;
     }
@@ -324,7 +332,23 @@ public final class SkyRealmsItemFactory {
     private static void appendStatsLore(List<Component> lore, SkyItemStats s) {
         addPercentStat(lore, "Farming Fortune", s.farmingFortune(), NamedTextColor.GREEN);
         addPercentStat(lore, "Farming XP", s.farmingXpBonus(), NamedTextColor.AQUA);
+        addFlatStat(lore, "Combat Damage", s.combatDamage(), NamedTextColor.RED);
+        addPercentStat(lore, "End Slayer Bonus", s.slayerDamageBonus(), NamedTextColor.GOLD);
+        addFlatStat(lore, "Max Health", s.maxHealthBonus(), NamedTextColor.LIGHT_PURPLE);
+        addFlatStat(lore, "Defense", s.defense(), NamedTextColor.BLUE);
         addPercentStat(lore, "Walk Speed", s.speedBonus(), NamedTextColor.WHITE);
+    }
+
+    private static void addFlatStat(List<Component> lore, String label, double value, NamedTextColor color) {
+        if (value <= 0.0) {
+            return;
+        }
+        String formatted = (Math.abs(value - Math.rint(value)) < 0.01)
+                ? String.format("+%.0f", value)
+                : String.format("+%.1f", value);
+        lore.add(Component.text(label + ": ", NamedTextColor.GRAY)
+                .append(Component.text(formatted, color))
+                .decoration(TextDecoration.ITALIC, false));
     }
 
     private static void addPercentStat(List<Component> lore, String label, double fraction, NamedTextColor color) {

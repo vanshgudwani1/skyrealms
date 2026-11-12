@@ -84,27 +84,76 @@ public final class ItemRegistryService implements CustomItemStatProvider {
         );
     }
 
+    public void registerCustomItem(@NotNull CustomItemDefinition def) {
+        catalog.register(def);
+    }
+
+    public void registerArmorSet(@NotNull ArmorSetBonus setBonus) {
+        catalog.registerArmorSet(setBonus);
+    }
+
     @NotNull
     public SkyItemStats calculateEquippedStats(
             @Nullable ItemStack mainHand,
             @Nullable ItemStack offHand,
             @Nullable ItemStack[] armorContents
     ) {
+        SkyItemStats total = SkyItemStats.EMPTY;
+
         Optional<CustomItemDefinition> mainDef = factory.readDefinition(mainHand);
         if (mainDef.isPresent() && mainDef.get().slot() == GearSlot.MAIN_HAND) {
-            return readItemStats(mainHand);
+            total = total.add(readItemStats(mainHand));
         }
-        return SkyItemStats.EMPTY;
+        Optional<CustomItemDefinition> offDef = factory.readDefinition(offHand);
+        if (offDef.isPresent() && offDef.get().slot() == GearSlot.OFF_HAND) {
+            total = total.add(readItemStats(offHand));
+        }
+        if (armorContents != null) {
+            for (ItemStack armorPiece : armorContents) {
+                Optional<CustomItemDefinition> armDef = factory.readDefinition(armorPiece);
+                if (armDef.isPresent() && isArmorSlot(armDef.get().slot())) {
+                    total = total.add(readItemStats(armorPiece));
+                }
+            }
+            Optional<ArmorSetBonus> setBonus = getActiveArmorSet(armorContents);
+            if (setBonus.isPresent()) {
+                total = total.add(setBonus.get().bonusStats());
+            }
+        }
+        return total;
     }
 
     @NotNull
     public Optional<ArmorSetBonus> getActiveArmorSet(@NotNull Player player) {
-        return Optional.empty();
+        return getActiveArmorSet(player.getInventory().getArmorContents());
     }
 
     @NotNull
     public Optional<ArmorSetBonus> getActiveArmorSet(@Nullable ItemStack[] armorContents) {
-        return Optional.empty();
+        if (armorContents == null || armorContents.length < 4) {
+            return Optional.empty();
+        }
+        String matchedSetId = null;
+        for (ItemStack piece : armorContents) {
+            Optional<CustomItemDefinition> defOpt = factory.readDefinition(piece);
+            if (defOpt.isEmpty() || !isArmorSlot(defOpt.get().slot())) {
+                return Optional.empty();
+            }
+            String pieceSet = defOpt.get().armorSetId();
+            if (pieceSet == null || pieceSet.isBlank()) {
+                return Optional.empty();
+            }
+            if (matchedSetId == null) {
+                matchedSetId = pieceSet;
+            } else if (!matchedSetId.equalsIgnoreCase(pieceSet)) {
+                return Optional.empty();
+            }
+        }
+        return Optional.ofNullable(matchedSetId).map(catalog::findArmorSet);
+    }
+
+    private static boolean isArmorSlot(GearSlot slot) {
+        return slot == GearSlot.HELMET || slot == GearSlot.CHESTPLATE || slot == GearSlot.LEGGINGS || slot == GearSlot.BOOTS;
     }
 
     @Override

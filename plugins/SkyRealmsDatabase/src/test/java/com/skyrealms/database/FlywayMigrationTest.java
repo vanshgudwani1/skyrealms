@@ -92,7 +92,12 @@ class FlywayMigrationTest {
                 "sr_farming_quests",
                 "sr_botanical_journal",
                 "sr_garden_plot_beds",
-                "sr_garden_saved_layouts"
+                "sr_garden_saved_layouts",
+                "sr_player_pets",
+                "sr_end_player_profile",
+                "sr_end_discipline_progress",
+                "sr_end_quest_progress",
+                "sr_end_bestiary"
         );
     }
 }

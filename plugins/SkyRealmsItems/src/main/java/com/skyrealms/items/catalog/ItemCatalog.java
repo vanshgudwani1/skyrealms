@@ -28,9 +28,10 @@ public final class ItemCatalog {
     public static final String VERDANT_REAPER = "verdant_reaper";
 
     private final Map<String, CustomItemDefinition> items;
+    private final Map<String, ArmorSetBonus> armorSets;
 
     public ItemCatalog() {
-        Map<String, CustomItemDefinition> map = new LinkedHashMap<>();
+        Map<String, CustomItemDefinition> map = Collections.synchronizedMap(new LinkedHashMap<>());
 
         register(map, CustomItemDefinition.builder(SPROUT_HOE, "Sprout Harvester Hoe", Material.IRON_HOE)
                 .rarity(ItemRarity.UNCOMMON)
@@ -61,7 +62,22 @@ public final class ItemCatalog {
                 .customModelData(1003)
                 .build());
 
-        this.items = Collections.unmodifiableMap(map);
+        this.items = map;
+        this.armorSets = Collections.synchronizedMap(new LinkedHashMap<>());
+    }
+
+    /**
+     * Registers an additional domain item (e.g., End Civilization weapons, armor, or materials)
+     * into the single universal SkyRealms ItemCatalog.
+     */
+    public void register(@NotNull CustomItemDefinition def) {
+        Objects.requireNonNull(def, "def cannot be null");
+        register(items, def);
+    }
+
+    public void registerArmorSet(@NotNull ArmorSetBonus setBonus) {
+        Objects.requireNonNull(setBonus, "setBonus cannot be null");
+        armorSets.put(setBonus.setId().toLowerCase(Locale.ROOT), setBonus);
     }
 
     private static void register(Map<String, CustomItemDefinition> map, CustomItemDefinition def) {
@@ -76,24 +92,31 @@ public final class ItemCatalog {
 
     @NotNull
     public Collection<CustomItemDefinition> all() {
-        return items.values();
+        synchronized (items) {
+            return List.copyOf(items.values());
+        }
     }
 
     @NotNull
     public List<CustomItemDefinition> byDomain(@NotNull ItemDomain domain) {
         Objects.requireNonNull(domain, "domain cannot be null");
-        return items.values().stream()
-                .filter(def -> def.domain() == domain)
-                .toList();
+        synchronized (items) {
+            return items.values().stream()
+                    .filter(def -> def.domain() == domain)
+                    .toList();
+        }
     }
 
     @Nullable
     public ArmorSetBonus findArmorSet(@NotNull String setId) {
-        return null;
+        Objects.requireNonNull(setId, "setId cannot be null");
+        return armorSets.get(setId.toLowerCase(Locale.ROOT));
     }
 
     @NotNull
     public Collection<ArmorSetBonus> allArmorSets() {
-        return Collections.emptyList();
+        synchronized (armorSets) {
+            return List.copyOf(armorSets.values());
+        }
     }
 }

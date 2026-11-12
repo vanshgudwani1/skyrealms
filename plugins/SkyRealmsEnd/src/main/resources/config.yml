@@ -1,0 +1,612 @@
+# SkyRealms End Civilization Configuration (Flat Testing Hub at Y=64)
+world:
+  name: fullya_end
+  offset:
+    x: 0
+    y: 0
+    z: 0
+  spawn:
+    x: 0.5
+    y: 64.0
+    z: 0.5
+    yaw: 180.0
+    pitch: 0.0
+  void-rescue-y: 30.0
+
+safe-zone:
+  protect-blocks: true
+  prevent-pvp: true
+  prevent-hostile-spawns: true
+  prevent-explosions: true
+  ellipse:
+    center-x: 0.0
+    center-z: 0.0
+    radius-x: 120.0
+    radius-z: 120.0
+  causeway-box:
+    min-x: -10
+    max-x: 10
+    min-y: 60
+    max-y: 80
+    min-z: -10
+    max-z: 10
+  void-crypt-box:
+    min-x: -9999
+    max-x: -9998
+    min-y: 0
+    max-y: 1
+    min-z: -9999
+    max-z: -9998
+
+districts:
+  central_plaza:
+    display-name: "Central Plaza"
+    subtitle: "Flat Testing Hub & Arrival Square"
+    color: "#FFD166"
+    spawn: { x: 0.5, y: 64.0, z: -5.5, yaw: 0.0 }
+  warrior_quarter:
+    display-name: "Warrior's Quarter"
+    subtitle: "Melee Guild, Forges & Sparring Courtyard"
+    color: "#FF6B6B"
+    spawn: { x: -34.5, y: 64.0, z: 18.5, yaw: 90.0 }
+  archer_quarter:
+    display-name: "Archer's Quarter"
+    subtitle: "Scouts' Guild & Archery Courtyard"
+    color: "#6BCB77"
+    spawn: { x: 34.5, y: 64.0, z: 18.5, yaw: -90.0 }
+  arcane_quarter:
+    display-name: "Arcane Quarter"
+    subtitle: "Astral Observatory & Arcane Courtyard"
+    color: "#B983FF"
+    spawn: { x: -34.5, y: 64.0, z: -24.5, yaw: 90.0 }
+  merchant_district:
+    display-name: "Merchant District"
+    subtitle: "End Trading Plaza & Guild Bazaars"
+    color: "#4ECDC4"
+    spawn: { x: 34.5, y: 64.0, z: -24.5, yaw: -90.0 }
+  grand_quest_hall:
+    display-name: "Grand Quest Hall"
+    subtitle: "Archives, Guild Contracts & Expeditions"
+    color: "#F7B267"
+    spawn: { x: 0.5, y: 64.0, z: 26.5, yaw: 180.0 }
+  dragon_sanctuary:
+    display-name: "Dragon Sanctuary"
+    subtitle: "Ancient Shrine & Qualification Seal"
+    color: "#E066FF"
+    spawn: { x: 0.5, y: 64.0, z: -32.5, yaw: 0.0 }
+
+training-arenas:
+  melee:
+    district: warrior_quarter
+    center: { x: -40.5, y: 64.0, z: 18.5 }
+    bounds: { min-x: -47, max-x: -34, min-y: 63, max-y: 74, min-z: 12, max-z: 25 }
+  archery:
+    district: archer_quarter
+    center: { x: 40.5, y: 64.0, z: 18.5 }
+    bounds: { min-x: 33, max-x: 52, min-y: 63, max-y: 82, min-z: 10, max-z: 28 }
+  arcane:
+    district: arcane_quarter
+    center: { x: -40.5, y: 64.0, z: -24.5 }
+    bounds: { min-x: -48, max-x: -33, min-y: 63, max-y: 78, min-z: -32, max-z: -16 }
+
+npcs:
+  # Central Plaza
+  village_steward:
+    name: "Village Steward"
+    title: "Keeper of the Old Pact"
+    district: central_plaza
+    role: STEWARD
+    anim: IDLE
+    action: DIALOGUE
+    action-target: central_welcome
+    x: -2.5
+    y: 64.0
+    z: -5.5
+    yaw: 0.0
+    dialogue:
+      - "For a thousand cycles these End Stone walls held back the void. Welcome to Civilization Square."
+      - "Seek Grandmaster Rovan, Master Kaelen, or Archmage Eryndor to begin your discipline training."
+  end_herald:
+    name: "End Herald"
+    title: "Wilderness Gatewarden"
+    district: central_plaza
+    role: HERALD
+    anim: QUEST
+    action: WARP_WILDERNESS
+    action-target: end_wilderness_menu
+    x: 0.5
+    y: 64.0
+    z: -5.5
+    yaw: 0.0
+    dialogue:
+      - "Beyond the South Causeway lie the Shattered Fields, Crystal Wilds, Forgotten Ruins, and Abyssal Grounds."
+      - "Ready your weapon before stepping outside the village ward."
+  network_guide:
+    name: "Network Guide"
+    title: "Astral Wayfarer"
+    district: central_plaza
+    role: GUIDE
+    anim: IDLE
+    action: DIALOGUE
+    action-target: navigation
+    x: 3.5
+    y: 64.0
+    z: -5.5
+    yaw: 0.0
+    dialogue:
+      - "North leads to Central Plaza and the Merchant District; West to the Grand Quest Hall; East to Dragon Sanctuary."
+      - "Use /endvillage districts at any time to orient yourself across all seven quarters."
+  leaderboard_keeper:
+    name: "Leaderboard Keeper"
+    title: "Chronicle of Masters"
+    district: central_plaza
+    role: ARCHIVIST
+    anim: QUEST
+    action: LEADERBOARD
+    action-target: discipline_rankings
+    x: 6.5
+    y: 64.0
+    z: -5.5
+    yaw: 0.0
+    dialogue:
+      - "Every strike loosed in Archery, Melee, and Arcane mastery is etched in our stone obelisks."
+
+  # Warrior's Quarter
+  grandmaster_rovan:
+    name: "Grandmaster Rovan"
+    title: "Warrior Guildmaster"
+    district: warrior_quarter
+    role: GUILDMASTER
+    anim: WARRIOR
+    action: QUEST_BOARD
+    action-target: guild_melee
+    x: -28.5
+    y: 64.0
+    z: 12.5
+    yaw: -90.0
+    dialogue:
+      - "Steel and discipline decide survival here, initiate. Prove your blade work in the courtyard."
+      - "Reach Level 30 Melee and conquer the Warrior Mastery Trial to earn my seal."
+  weaponsmith_doran:
+    name: "Weaponsmith Doran"
+    title: "Endsteel Bladesmith"
+    district: warrior_quarter
+    role: BLACKSMITH
+    anim: BLACKSMITH
+    action: CRAFTING
+    action-target: melee_weapons
+    x: -28.5
+    y: 64.0
+    z: 15.5
+    yaw: -90.0
+    dialogue:
+      - "Hear that anvil ring? Bring Endsteel ingots and void shards, and I'll forge your next greatblade."
+  armorsmith_haldor:
+    name: "Armorsmith Haldor"
+    title: "Citadel Armorer"
+    district: warrior_quarter
+    role: BLACKSMITH
+    anim: BLACKSMITH
+    action: CRAFTING
+    action-target: melee_armor
+    x: -28.5
+    y: 64.0
+    z: 18.5
+    yaw: -90.0
+    dialogue:
+      - "A thin plate shatters in the Abyssal Grounds. Let us temper your cuirass properly."
+  arena_champion:
+    name: "Arena Champion"
+    title: "Sparring Master"
+    district: warrior_quarter
+    role: TRAINER
+    anim: WARRIOR
+    action: TRAINING
+    action-target: melee_arena
+    x: -28.5
+    y: 64.0
+    z: 21.5
+    yaw: -90.0
+    dialogue:
+      - "Step onto the Arena stones when you're ready for sparring waves and parry trials."
+  combat_instructor:
+    name: "Combat Instructor"
+    title: "Form & Parry Mentor"
+    district: warrior_quarter
+    role: TRAINER
+    anim: WARRIOR
+    action: TRAINING
+    action-target: melee_combos
+    x: -28.5
+    y: 64.0
+    z: 24.5
+    yaw: -90.0
+    dialogue:
+      - "Strike cleanly, chain your combos, and guard before the cleave lands."
+
+  # Archer's Quarter
+  master_kaelen:
+    name: "Master Kaelen"
+    title: "Archer Guildmaster"
+    district: archer_quarter
+    role: GUILDMASTER
+    anim: ARCHER
+    action: QUEST_BOARD
+    action-target: guild_archery
+    x: 28.5
+    y: 64.0
+    z: 12.5
+    yaw: 90.0
+    dialogue:
+      - "In the End void, wind shifts mid-flight. True marksmen read the purple haze before drawing."
+      - "Only Level 30 Archers who clear the Precision Mastery Trial win my mark."
+  fletcher_elira:
+    name: "Fletcher Elira"
+    title: "Endwood Bowyer"
+    district: archer_quarter
+    role: FLETCHER
+    anim: ARCHER
+    action: CRAFTING
+    action-target: archery_bows
+    x: 28.5
+    y: 64.0
+    z: 15.5
+    yaw: 90.0
+    dialogue:
+      - "Every limb of our Endwood and Astral longbows is balanced with chorus resin."
+  hunter_varek:
+    name: "Hunter Varek"
+    title: "Wilds Scout Sentinel"
+    district: archer_quarter
+    role: HUNTER
+    anim: GUARD
+    action: WARP_WILDERNESS
+    action-target: wilderness_tracker
+    x: 28.5
+    y: 64.0
+    z: 18.5
+    yaw: 90.0
+    patrol:
+      - { x: 28.5, y: 64.0, z: 18.5, yaw: 90.0 }
+      - { x: 30.5, y: 64.0, z: 18.5, yaw: 90.0 }
+      - { x: 30.5, y: 64.0, z: 20.5, yaw: 90.0 }
+      - { x: 28.5, y: 64.0, z: 20.5, yaw: 90.0 }
+    dialogue:
+      - "I scout the outer ridges daily. Bring troves from Crystal Wilds if you wish to craft Voidpiercer gear."
+  precision_trainer:
+    name: "Precision Trainer"
+    title: "Range Instructor"
+    district: archer_quarter
+    role: TRAINER
+    anim: ARCHER
+    action: TRAINING
+    action-target: archery_range
+    x: 28.5
+    y: 64.0
+    z: 21.5
+    yaw: 90.0
+    dialogue:
+      - "Hit stationary, sweeping, and airborne targets in the Archery Courtyard to earn Archery XP."
+  relic_collector:
+    name: "Relic Collector"
+    title: "Curator of Trophies"
+    district: archer_quarter
+    role: COLLECTOR
+    anim: MERCHANT
+    action: QUEST_BOARD
+    action-target: archery_collections
+    x: 28.5
+    y: 64.0
+    z: 24.5
+    yaw: 90.0
+    dialogue:
+      - "Fossils, shattered arrows, and void crests all hold value to the scouts' guild."
+
+  # Arcane Quarter
+  archmage_eryndor:
+    name: "Archmage Eryndor"
+    title: "Arcane Guildmaster"
+    district: arcane_quarter
+    role: GUILDMASTER
+    anim: MAGE
+    action: QUEST_BOARD
+    action-target: guild_mage
+    x: -28.5
+    y: 64.0
+    z: -18.5
+    yaw: -90.0
+    dialogue:
+      - "The Astral Observatory above us channels the residue of stars long extinguished."
+      - "Master your spells and attain Level 30 Mage to undergo the Arcane Mastery Trial."
+  spell_researcher:
+    name: "Spell Researcher"
+    title: "Theorist of the Void"
+    district: arcane_quarter
+    role: RESEARCHER
+    anim: MAGE
+    action: TRAINING
+    action-target: arcane_trials
+    x: -28.5
+    y: 64.0
+    z: -21.5
+    yaw: -90.0
+    dialogue:
+      - "Step into the Arcane Courtyard beside us to test mana cadence and elemental sigil bursts."
+  mana_alchemist:
+    name: "Mana Alchemist"
+    title: "Chorus Brewer"
+    district: arcane_quarter
+    role: ALCHEMIST
+    anim: MAGE
+    action: SHOP
+    action-target: shop_alchemy
+    x: -28.5
+    y: 64.0
+    z: -24.5
+    yaw: -90.0
+    dialogue:
+      - "Distilled chorus essence restores focus faster than any Overworld brew."
+  rune_enchanter:
+    name: "Rune Enchanter"
+    title: "Sigil Artisan"
+    district: arcane_quarter
+    role: ENCHANTER
+    anim: MAGE
+    action: CRAFTING
+    action-target: mage_staffs
+    x: -28.5
+    y: 64.0
+    z: -27.5
+    yaw: -90.0
+    dialogue:
+      - "Amethyst foci bind the void cleanly—bring fragments to attune a Crystal or Rift Conduit staff."
+  elemental_master:
+    name: "Elemental Master"
+    title: "Conjuration Trainer"
+    district: arcane_quarter
+    role: TRAINER
+    anim: MAGE
+    action: TRAINING
+    action-target: arcane_elements
+    x: -28.5
+    y: 64.0
+    z: -30.5
+    yaw: -90.0
+    dialogue:
+      - "Chain frost, void-bolt, and amethyst pulse casts against the spell targets cleanly."
+
+  # Merchant District
+  general_merchant:
+    name: "General Merchant"
+    title: "End Trading Post"
+    district: merchant_district
+    role: MERCHANT
+    anim: MERCHANT
+    action: SHOP
+    action-target: shop_general
+    x: 28.5
+    y: 64.0
+    z: -15.5
+    yaw: 90.0
+    dialogue:
+      - "Rations, chorus bundles, lanterns, and utility supplies—all priced fairly in SkyRealms Coins."
+  fletcher_merchant:
+    name: "Fletcher Merchant"
+    title: "Munitions Vendor"
+    district: merchant_district
+    role: MERCHANT
+    anim: MERCHANT
+    action: SHOP
+    action-target: shop_fletcher
+    x: 28.5
+    y: 64.0
+    z: -18.5
+    yaw: 90.0
+    dialogue:
+      - "Precision arrows, Apprentice and Hunter bows ready for quick restocking."
+  weapons_merchant:
+    name: "Weapons Merchant"
+    title: "Blade Outfitter"
+    district: merchant_district
+    role: MERCHANT
+    anim: MERCHANT
+    action: SHOP
+    action-target: shop_weapons
+    x: 28.5
+    y: 64.0
+    z: -21.5
+    yaw: 90.0
+    dialogue:
+      - "Every blade forged in Doran's heat passes through my counter first."
+  armor_merchant:
+    name: "Armor Merchant"
+    title: "Plate & Ward Vendor"
+    district: merchant_district
+    role: MERCHANT
+    anim: MERCHANT
+    action: SHOP
+    action-target: shop_armor
+    x: 28.5
+    y: 64.0
+    z: -24.5
+    yaw: 90.0
+    dialogue:
+      - "Light skirmisher leathers, heavy Endsteel plate, or woven spellcaster vestments."
+  arcane_merchant:
+    name: "Arcane Merchant"
+    title: "Curio & Catalyst Trader"
+    district: merchant_district
+    role: MERCHANT
+    anim: MAGE
+    action: SHOP
+    action-target: shop_arcane
+    x: 28.5
+    y: 64.0
+    z: -27.5
+    yaw: 90.0
+    dialogue:
+      - "Focus staffs, amethyst catalysts, and enchanted inks fresh from the Observatory."
+  material_collector:
+    name: "Material Collector"
+    title: "Wilds Salvage Exchange"
+    district: merchant_district
+    role: COLLECTOR
+    anim: MERCHANT
+    action: SHOP
+    action-target: exchange_materials
+    x: 28.5
+    y: 64.0
+    z: -30.5
+    yaw: 90.0
+    dialogue:
+      - "Convert surplus monster drops from the hunting wilds directly into coin and crafting salvage."
+  auction_broker:
+    name: "Auction Broker"
+    title: "Citadel Exchange House"
+    district: merchant_district
+    role: AUCTION
+    anim: MERCHANT
+    action: AUCTION
+    action-target: auction_house
+    x: 28.5
+    y: 64.0
+    z: -33.5
+    yaw: 90.0
+    dialogue:
+      - "Rare boss drops and mastercrafted gear change hands quickly in the Citadel Auction House."
+
+  # Grand Quest Hall
+  quest_archivist:
+    name: "Quest Archivist"
+    title: "Chronicle Master"
+    district: grand_quest_hall
+    role: QUEST
+    anim: QUEST
+    action: QUEST_BOARD
+    action-target: main_story
+    x: -4.5
+    y: 64.0
+    z: 26.5
+    yaw: 180.0
+    dialogue:
+      - "The Main Story of the End Civilization awaits in these bound volumes."
+  guild_registrar:
+    name: "Guild Registrar"
+    title: "Contracts & Disciplines"
+    district: grand_quest_hall
+    role: QUEST
+    anim: QUEST
+    action: QUEST_BOARD
+    action-target: daily_contracts
+    x: -1.5
+    y: 64.0
+    z: 26.5
+    yaw: 180.0
+    dialogue:
+      - "Check in daily and weekly for combat contracts across all three disciplines."
+  reputation_keeper:
+    name: "Reputation Keeper"
+    title: "Civic Steward of Honor"
+    district: grand_quest_hall
+    role: QUEST
+    anim: QUEST
+    action: REPUTATION
+    action-target: reputation_rewards
+    x: 1.5
+    y: 64.0
+    z: 26.5
+    yaw: 180.0
+    dialogue:
+      - "High standing with our guilds unlocks exclusive sigils, perks, and sanctuary favors."
+  expedition_researcher:
+    name: "Expedition Researcher"
+    title: "Wilderness Cartographer"
+    district: grand_quest_hall
+    role: QUEST
+    anim: QUEST
+    action: QUEST_BOARD
+    action-target: exploration_quests
+    x: 4.5
+    y: 64.0
+    z: 26.5
+    yaw: 180.0
+    dialogue:
+      - "Survey every hunting tier and record the ancient landmarks before venturing deeper."
+
+  # Dragon Sanctuary
+  dragon_historian:
+    name: "Dragon Historian"
+    title: "Loremaster of the Seal"
+    district: dragon_sanctuary
+    role: LICENSE
+    anim: QUEST
+    action: DRAGON_LICENSE
+    action-target: historian_questline
+    x: -6.5
+    y: 64.0
+    z: -32.5
+    yaw: 0.0
+    dialogue:
+      - "Only those who conquer Level 30 Archery, Melee, and Mage—and complete all three Mastery Trials—may claim the Dragon Dungeon License."
+  dungeon_keeper:
+    name: "Dungeon Keeper"
+    title: "Gatekeeper of Qualification"
+    district: dragon_sanctuary
+    role: LICENSE
+    anim: GUARD
+    action: DRAGON_LICENSE
+    action-target: license_status
+    x: -3.5
+    y: 64.0
+    z: -32.5
+    yaw: 0.0
+    patrol:
+      - { x: -3.5, y: 64.0, z: -32.5, yaw: 0.0 }
+      - { x: -1.5, y: 64.0, z: -32.5, yaw: 0.0 }
+      - { x: -1.5, y: 64.0, z: -30.5, yaw: 0.0 }
+      - { x: -3.5, y: 64.0, z: -30.5, yaw: 0.0 }
+    dialogue:
+      - "Show me an unlocked Dragon License, and your readiness for future trials is sealed forever."
+  dragon_equipment_merchant:
+    name: "Dragon Equipment Merchant"
+    title: "Sanctuary Armorer"
+    district: dragon_sanctuary
+    role: MERCHANT
+    anim: MERCHANT
+    action: SHOP
+    action-target: shop_sanctuary
+    x: -0.5
+    y: 64.0
+    z: -32.5
+    yaw: 0.0
+    dialogue:
+      - "Astral-tier preparations and rare catalysts reserved for dedicated veterans."
+  bestiary_archivist:
+    name: "Bestiary Archivist"
+    title: "Tome of End Beasts"
+    district: dragon_sanctuary
+    role: ARCHIVIST
+    anim: QUEST
+    action: QUEST_BOARD
+    action-target: bestiary_view
+    x: 2.5
+    y: 64.0
+    z: -32.5
+    yaw: 0.0
+    dialogue:
+      - "Every slain Void Stalker, Crystal Construct, and Field Boss is catalogued inside my ledger."
+  dragon_guardian:
+    name: "Dragon Guardian"
+    title: "Sentinel of the Void Crypt"
+    district: dragon_sanctuary
+    role: GUARD
+    anim: GUARD
+    action: DRAGON_LICENSE
+    action-target: sanctum_ward
+    x: 5.5
+    y: 64.0
+    z: -32.5
+    yaw: 0.0
+    dialogue:
+      - "Beneath the stone sits the oldest seal of our civilization. Earn all three masteries before challenging what lies beyond."
+

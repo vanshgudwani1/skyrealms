@@ -13,6 +13,7 @@ dependencies {
     compileOnly("org.jetbrains:annotations:26.0.2")
 
     testImplementation(project(":platform:testing"))
+    testImplementation("io.papermc.paper:paper-api:${property("paperApiVersion")}")
 }
 
 tasks.jar {

@@ -12,3 +12,8 @@ threading:
 # Module manager settings
 modules:
   auto-enable-on-boot: true
+
+# Extra custom world folders in server root to auto-load on boot
+extra-worlds:
+  - fullya
+  - fullya_end
